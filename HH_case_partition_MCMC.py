@@ -32,7 +32,7 @@ def IndexChange1dTo2d(k):
         i = np.ceil((-3+np.sqrt(9+8+8*k))/2)
         
     return(int(i),int(k-0.5*(i-1)*(i+2)))
-#%% Iteration functions
+#%% Iteration functions - Functions that are run every iteration
 def MoveContact(C,k1,k2,infected):
     if k1<2:
         raise ValueError("Chosen household would be empty if individual was removed")
