@@ -107,8 +107,8 @@ def SelectIndices(C,dot_for_contacts,m,u_inf,n_moves=1):
         C_temp[k1]-=1
         remove_indices[i] = k1
         
-        k2 = int(np.random.choice(np.arange(max_k2),p = C_temp_contacts[:max_k2]/sum(C_temp_contacts[:max_k2])))
-        proposal_prob *= C_temp_contacts[k2]/sum(C_temp_contacts[:max_k2])
+        k2 = int(np.random.choice(np.arange(max_k2),p = C_temp[:max_k2]/sum(C_temp[:max_k2])))
+        proposal_prob *= C_temp[k2]/sum(C_temp[:max_k2])
         C_temp[k2]-=1
         place_indices[i] = k2
         
@@ -125,6 +125,7 @@ def SelectIndices(C,dot_for_contacts,m,u_inf,n_moves=1):
         
     
     return remove_indices,place_indices,infected,proposal_prob
+
 def MoveContact(C,k1,k2,infected):
     """
     For a given case and contacts partition, indices and infected status returns a new partition for moving one individual of that infected status from a household of one type to another.
@@ -171,7 +172,7 @@ def MoveContact(C,k1,k2,infected):
     return C_new
 
 
-def RevProposalProbability(C_proposed,C_current,dot_for_contacts,k1,k2,infected,m):
+def RevProposalProbability(C_proposed,dot_for_contacts,remove_indices,place_indices,infected,m):
     """
     Calculates the probability of proposing the current partition from the newly proposed one.
 
@@ -198,19 +199,27 @@ def RevProposalProbability(C_proposed,C_current,dot_for_contacts,k1,k2,infected,
         DESCRIPTION.
 
     """
-    C_proposed_contacts = C_proposed*(dot_for_contacts)
+    n_moves = len(remove_indices)
     proposal_prob = 1
-    proposal_prob *=  C_proposed_contacts[k2]/sum(C_proposed_contacts[2:])
     C_temp = C_proposed.copy()
-    C_temp[k2]-=1
-    C_temp_contacts = C_temp*dot_for_contacts
     max_k1 = int(0.5*(m+2)*(m-1))
-    proposal_prob *= C_temp_contacts[k1]/sum(C_temp_contacts[:max_k1])
-    n1,y1 = IndexChange1dTo2d(k2)
-    if infected:
-        proposal_prob*= y1/n1
-    else:
-        proposal_prob*= 1-(y1/n1)
+    for i in range(n_moves):
+        k1 = int(remove_indices[i])
+        k2 = int(place_indices[i])
+        
+        C_temp_contacts = C_temp*(dot_for_contacts)
+        proposal_prob *=  C_temp_contacts[k2]/sum(C_temp_contacts[2:])
+        C_temp[k2]-=1
+        
+        C_temp_contacts = C_temp*dot_for_contacts
+        proposal_prob *= C_temp[k1]/sum(C_temp[:max_k1])
+        C_temp[k1]-=1
+        
+        n1,y1 = IndexChange1dTo2d(k2)
+        if infected[i]:
+            proposal_prob*= y1/n1
+        else:
+            proposal_prob*= 1-(y1/n1)
     return proposal_prob
     
 #%%% Likelihood Functions
@@ -274,7 +283,7 @@ def PartitionLogLikelihood(C,beta,m):
     return ll
 
 #%% Run MCMC
-def RunPartitionsMCMC(C0,beta,m,n_iters):
+def RunPartitionsMCMC(C0,beta,m,n_iters,n_moves=1):
     """
     Runs an MCMC over
 
@@ -302,7 +311,7 @@ def RunPartitionsMCMC(C0,beta,m,n_iters):
     
     #Generate random numbers
     u = np.random.uniform(0,1,size=n_iters) #Accept/reject proposals
-    u_infected = np.random.uniform(0,1,size=n_iters) #Determine infected status of each proposed move
+    u_infected = np.random.uniform(0,1,size=(n_iters,n_moves)) #Determine infected status of each proposed move
     
     
     C = np.zeros((n_iters+1,max_k))
@@ -311,10 +320,12 @@ def RunPartitionsMCMC(C0,beta,m,n_iters):
     likelihoods[0] = PartitionLogLikelihood(C0, beta, m)
 
     for i in tqdm(range(n_iters),desc = "Running MCMC"):
-        k1,k2,infected,proposal_prob = SelectIndices(C[i], dot_for_contacts, m, u_infected[i]) #Select move
-        C_proposed = MoveContact(C[i], k1, k2, infected) #Generate new partition given the proposed move
+        remove_indices,place_indices,infected,proposal_prob = SelectIndices(C[i], dot_for_contacts, m, u_infected[i],n_moves) #Select 
+        C_proposed = C[i].copy()
+        for j,(k1,k2) in enumerate(zip(remove_indices,place_indices)):
+            C_proposed = MoveContact(C_proposed, int(k1), int(k2), infected[j]) #Generate new partition given the proposed move
         
-        reverse_proposal_prob = RevProposalProbability(C_proposed, C[i], dot_for_contacts, k1, k2, infected, m)
+        reverse_proposal_prob = RevProposalProbability(C_proposed, dot_for_contacts, remove_indices,place_indices, infected, m)
         
         llh_proposed = PartitionLogLikelihood(C_proposed, beta, m)
         llhA = llh_proposed - likelihoods[i]
