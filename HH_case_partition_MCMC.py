@@ -63,6 +63,68 @@ def IndexChange1dTo2d(k):
         
     return(int(i),int(k-0.5*(i-1)*(i+2)))
 #%% Iteration functions - Functions that are run every iteration
+
+def SelectIndices(C,dot_for_contacts,m,u_inf,n_moves=1):
+    """
+    For a given case and contacts partition, selects indices and infected status for the movement of an individual. 
+
+    Parameters
+    ----------
+    C : np.ndarray length k_max
+        Partition of contacts and cases
+    dot_for_contacts : np.ndarray length k_max 
+        np.concatenate([np.zeros(n+1)+n for n in range(1,m+1)])
+    m : int
+        Maximum size of a household
+    u_inf : float
+        Random number between 0 and 1 used to determine infection status of the selected individual
+
+    Returns
+    -------
+    k1 : int
+        1D index of the type of household from which an individual will be removed
+    k2 : int
+        1D index of the type of household from which an individual will be added
+    infected : bool
+        Boolean value indicating if the individual being moved is infected
+    proposal_prob : float
+        Probability of selecting the proposed move given each individual s
+
+    """
+    max_k = len(C)
+    proposal_prob = 1
+    C_temp = C.copy()
+    max_k2 = int(0.5*(m+2)*(m-1))
+    
+    remove_indices = np.zeros(n_moves)
+    place_indices = np.zeros(n_moves)
+    infected = np.zeros(n_moves)
+
+    for i in range(n_moves):
+        C_temp_contacts = C_temp*dot_for_contacts
+        k1 = int(np.random.choice(np.arange(2,max_k),p = C_temp_contacts[2:]/sum(C_temp_contacts[2:])))
+        proposal_prob *= C_temp_contacts[k1]/sum(C_temp_contacts[2:])
+        C_temp[k1]-=1
+        remove_indices[i] = k1
+        
+        k2 = int(np.random.choice(np.arange(max_k2),p = C_temp_contacts[:max_k2]/sum(C_temp_contacts[:max_k2])))
+        proposal_prob *= C_temp_contacts[k2]/sum(C_temp_contacts[:max_k2])
+        C_temp[k2]-=1
+        place_indices[i] = k2
+        
+        n1,y1 = IndexChange1dTo2d(k1)
+        inf_check = (y1/n1)>u_inf[i]
+        if inf_check:
+            proposal_prob*= y1/n1
+            infected[i] = 1
+        else:
+            proposal_prob*= 1-(y1/n1)
+    
+    
+   
+        
+    
+    return remove_indices,place_indices,infected,proposal_prob
 def MoveContact(C,k1,k2,infected):
     """
     For a given case and contacts partition, indices and infected status returns a new partition for moving one individual of that infected status from a household of one type to another.
@@ -108,54 +170,6 @@ def MoveContact(C,k1,k2,infected):
     C_new[k4] += 1
     return C_new
 
-def SelectIndices(C,dot_for_contacts,m,u_inf):
-    """
-    For a given case and contacts partition, selects indices and infected status for the movement of an individual. 
-
-    Parameters
-    ----------
-    C : np.ndarray length k_max
-        Partition of contacts and cases
-    dot_for_contacts : np.ndarray length k_max 
-        np.concatenate([np.zeros(n+1)+n for n in range(1,m+1)])
-    m : int
-        Maximum size of a household
-    u_inf : float
-        Random number between 0 and 1 used to determine infection status of the selected individual
-
-    Returns
-    -------
-    k1 : int
-        1D index of the type of household from which an individual will be removed
-    k2 : int
-        1D index of the type of household from which an individual will be added
-    infected : bool
-        Boolean value indicating if the individual being moved is infected
-    proposal_prob : float
-        Probability of selecting the proposed move given each individual s
-
-    """
-    max_k = len(C)
-    proposal_prob = 1
-    C_contacts = C*dot_for_contacts
-    k1 = int(np.random.choice(np.arange(2,max_k),p = C_contacts[2:]/sum(C_contacts[2:])))
-    proposal_prob *= C_contacts[k1]/sum(C_contacts[2:])
-    n1,y1 = IndexChange1dTo2d(k1)
-    infected = (y1/n1)>u_inf
-    if infected:
-        proposal_prob*= y1/n1
-    else:
-        proposal_prob*= 1-(y1/n1)
-    
-    C_temp = C.copy()
-    C_temp[k1]-=1
-    C_temp_contacts = C_temp*dot_for_contacts
-    max_k2 = int(0.5*(m+2)*(m-1))
-    k2 = int(np.random.choice(np.arange(max_k2),p = C_temp_contacts[:max_k2]/sum(C_temp_contacts[:max_k2])))
-    proposal_prob *= C_temp_contacts[k2]/sum(C_temp_contacts[:max_k2])
-    
-    
-    return k1,k2,infected,proposal_prob
 
 def RevProposalProbability(C_proposed,C_current,dot_for_contacts,k1,k2,infected,m):
     """
