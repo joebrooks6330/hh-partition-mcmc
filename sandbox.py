@@ -27,7 +27,39 @@ def GenerateSyntheticData(N,beta,hh_size_dist):
             C[index] += final_size_counts[k]
     return C
 
-def PlotContactsCasesByHHSize(C):
+def FlatPartition(n,y,N,m):
+    C = np.zeros(int(0.5*m*(m+3)))
+    
+    hh_size_s = int(n//N)
+    hh_size_l = hh_size_s + 1
+    
+    N_l = n-hh_size_s*N
+    N_s = N - N_l
+    
+    cases_less = int(y//N)
+    cases_more = cases_less+1
+    N_more = y - N*cases_less
+    N_less = N - N_more
+    
+    
+    k_less_s = IndexChange2dTo1d(hh_size_s, cases_less)
+    k_more_s = IndexChange2dTo1d(hh_size_s, cases_more)
+    k_less_l = IndexChange2dTo1d(hh_size_l, cases_less)
+    k_more_l = IndexChange2dTo1d(hh_size_l, cases_more)
+    if N_less<=N_s:
+        C[k_less_s] = N_less
+        if N_more<= N_s-N_less:
+            C[k_more_s] = N_more
+        else:
+            C[k_more_s] = N_s-N_less
+            C[k_more_l] = N_more - C[k_more_s]
+    else:
+        C[k_less_s] = N_s
+        C[k_less_l] = N_less- N_s
+        C[k_more_l] = N_more
+    return C
+
+def PlotContactsCasesByHHSize(C,ax):
     contacts = np.zeros(m)
     cases = np.zeros(m)
     for n in range(1,m+1):
@@ -35,25 +67,48 @@ def PlotContactsCasesByHHSize(C):
         cases[n-1] = (C[np.where(dot_for_contacts==n)]).dot(np.arange(n+1))
         SAR = cases[n-1]/contacts[n-1]
         plt.text(n+0.5, contacts[n-1]+10,"SAR = " + str(round(SAR,2)))
-    plt.bar(np.arange(2,m+2),contacts,label = "Contacts")
-    plt.bar(np.arange(2,m+2),cases,label = "Cases")
-    plt.xlabel("Household size")
-    plt.ylabel("Count")
-    plt.legend()
+    ax.bar(np.arange(2,m+2),contacts,label = "Contacts")
+    ax.bar(np.arange(2,m+2),cases,label = "Cases")
+    ax.set_xlabel("Household size")
+    ax.set_ylabel("Count")
+    ax.legend()
 #%% Sandbox
 
 N=1000
 beta = 0.5
-hh_size_dist = [0.2,0.4,0.25,0.1,0.05]
+hh_size_dist = [0.5,0.25,0.15,0.05,0.05]
+m = len(hh_size_dist)
 C_true = GenerateSyntheticData(N, beta, hh_size_dist)
-PlotContactsCasesByHHSize(C_true)
 
 dot_for_cases = np.concatenate([np.arange(0,n+1) for n in range(1,m+1)])
 dot_for_contacts = np.concatenate([np.zeros(n+1)+n for n in range(1,m+1)])
 
-C0 = np.arange(max_k,0,-1)
-total_contacts = C0.dot(dot_for_contacts)
+n = C_true.dot(dot_for_contacts)
+y = C_true.dot(dot_for_cases)
 
-n_iters = 10000
+C_flat = FlatPartition(n, y, N, m)
 
-C,llhs = RunPartitionsMCMC(C0, 1.5, m, n_iters)
+n_iters = 100000
+
+C_start_true,llhs_start_true = RunPartitionsMCMC(C_true, beta, m, n_iters)
+C_start_flat,llhs_start_flat = RunPartitionsMCMC(C_flat, beta, m, n_iters)
+
+fig1,ax1 = plt.subplots()
+ax1.plot(llhs_start_flat,label = "Start flat")
+ax1.plot(llhs_start_true,label = "Start true")
+plt.plot([0,n_iters*2],[llhs_start_true[0],llhs_start_true[0]],linestyle = "--")
+plt.xlim(0,n_iters)
+ax1.set_ylabel("LL")
+ax1.legend()
+
+fig2,ax2 = plt.subplots()
+PlotContactsCasesByHHSize(C_true, ax2)
+for i,c in enumerate(C_start_true[int(n_iters*0.1)::int(n_iters/100)]):
+    contacts = np.zeros(m)
+    cases = np.zeros(m)
+    for n in range(1,m+1):
+        contacts[n-1] = n*sum(c[np.where(dot_for_contacts==n)])
+        cases[n-1] = (c[np.where(dot_for_contacts==n)]).dot(np.arange(n+1))
+    ax2.plot(np.arange(2,m+2),contacts,alpha=0.1,color = "green")
+    
+final_size_distribution_homogeneous_no_intro(1, 1, beta, lambda t: np.exp(-t))
