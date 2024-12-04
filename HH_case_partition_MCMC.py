@@ -265,6 +265,26 @@ def final_size_distribution_homogeneous_no_intro(n,m,beta,phi):
 
     return(P)
 
+def LogFactorial(a):
+    """
+    Calculates log(a!)
+
+    Parameters
+    ----------
+    a : int
+
+    Returns
+    -------
+    result : result
+        log(a!)
+    """
+    if not (type(a) == int and a>0):
+        raise TypeError("a must be a positive integer")
+    result = 0
+    for i in range(1,a+1):
+        result += np.log(i)
+    return result
+
 def PartitionLogLikelihood(C,beta,m):
     """
     Calculates the log-likelihood for a given partition and transmission parameter. Assume frequency based mixing and constant infectious period.
@@ -288,9 +308,18 @@ def PartitionLogLikelihood(C,beta,m):
     
     phi = lambda t: np.exp(-t) # Constant infectious period
     fs = [final_size_distribution_homogeneous_no_intro(n, 1, beta/n, phi) for n in range(1,m+1)]
-    for k,c in enumerate(C):
-        n,y = IndexChange1dTo2d(k)
-        ll += c*np.log(fs[n-1][y])
+    for n in range(1,m+1):
+        total_hh_size_n = 0
+        for y in range(n+1):
+            k = IndexChange2dTo1d(n, y)
+            count = int(C[k])
+            if count>0:
+                ll += count * np.log(fs[n-1][y])
+                ll -= LogFactorial(count)
+                total_hh_size_n += count
+        if total_hh_size_n>0:
+            ll += LogFactorial(total_hh_size_n)
+        
     return ll
 
 #%% Run MCMC
