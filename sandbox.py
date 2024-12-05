@@ -2,6 +2,10 @@
 from HH_case_partition_MCMC import *
 import matplotlib.pyplot as plt
 import numpy as np
+import winsound
+from time import sleep
+from scipy.stats import gaussian_kde
+
 
 plt.style.use("ggplot")
 
@@ -59,7 +63,41 @@ def FlatPartition(n,y,N,m):
         C[k_more_l] = N_more
     return C
 
-def PlotContactsCasesByHHSize(C,ax):
+def SplitPartition(n,y,N,m):
+    C = np.zeros(int(0.5*m*(m+3)))
+    max_k =len(C)
+    
+    N_m = int(np.floor((n-N)/(m-1)))
+    N_1 = int(N-np.ceil((n-N)/(m-1)))
+    last_size = N-N_m-N_1
+    
+    if y<N_1:
+        C[0] = N_1-y
+        C[1] = y
+        C[IndexChange2dTo1d(last_size, 0)] = 1
+        C[IndexChange2dTo1d(m, 0)] = N_m
+    else:
+        C[1] = N_1
+        y -= N_1
+        if y< m*N_m:
+            C[IndexChange2dTo1d(last_size, 0)] = 1
+            C[IndexChange2dTo1d(m, m)] = y//m
+
+            if y%m ==0:
+                C[IndexChange2dTo1d(m, 0)] = N_m - y//m
+            else:
+                C[IndexChange2dTo1d(m, int(y%m))] = 1
+                C[IndexChange2dTo1d(m, 0)] =  N_m - y//m - 1
+        else:
+            C[IndexChange2dTo1d(m, m)] = N_m
+            y-= N_m*m
+            C[IndexChange2dTo1d(last_size, y)] = 1
+            
+            
+        return C
+        
+
+def PlotContactsCasesByHHSize(C,m,ax):
     contacts = np.zeros(m)
     cases = np.zeros(m)
     for n in range(1,m+1):
@@ -67,48 +105,96 @@ def PlotContactsCasesByHHSize(C,ax):
         cases[n-1] = (C[np.where(dot_for_contacts==n)]).dot(np.arange(n+1))
         SAR = cases[n-1]/contacts[n-1]
         plt.text(n+0.5, contacts[n-1]+10,"SAR = " + str(round(SAR,2)))
+    print(contacts)
     ax.bar(np.arange(2,m+2),contacts,label = "Contacts")
     ax.bar(np.arange(2,m+2),cases,label = "Cases")
     ax.set_xlabel("Household size")
     ax.set_ylabel("Count")
     ax.legend()
+
+def FinishedBeep(n_beeps,duration,freq):
+    for i in range(n_beeps):
+        winsound.Beep(freq, duration)
+        sleep(duration/2000)
+        
 #%% Sandbox
 
-N=1000
+N=100
 beta = 0.5
-hh_size_dist = [0.5,0.25,0.15,0.05,0.05]
+hh_size_dist = [0.25,0.45,0.15,0.1,0.05]
 m = len(hh_size_dist)
-C_true = GenerateSyntheticData(N, beta, hh_size_dist)
+
 
 dot_for_cases = np.concatenate([np.arange(0,n+1) for n in range(1,m+1)])
 dot_for_contacts = np.concatenate([np.zeros(n+1)+n for n in range(1,m+1)])
 
-n = C_true.dot(dot_for_contacts)
-y = C_true.dot(dot_for_cases)
 
-C_flat = FlatPartition(n, y, N, m)
+
+
 
 n_iters = 100000
+n_tests = 20
 
-C_start_true,llhs_start_true = RunPartitionsMCMC(C_true, beta, m, n_iters)
-C_start_flat,llhs_start_flat = RunPartitionsMCMC(C_flat, beta, m, n_iters)
+fig_comb,ax_comb = plt.subplots()
+max_comb = -1
+ax_comb.set_title("N = " + str(N) + ", " + r"$\beta=$" + str(beta) )
+ax_comb.vlines([beta],-1,100,linestyle = "--",label = "Actual value")
+ax_comb.set_ylabel("Density")
+ax_comb.set_xlabel("Transmission Parameter" + r"$(\beta )$")
 
-fig1,ax1 = plt.subplots()
-ax1.plot(llhs_start_flat,label = "Start flat")
-ax1.plot(llhs_start_true,label = "Start true")
-plt.plot([0,n_iters*2],[llhs_start_true[0],llhs_start_true[0]],linestyle = "--")
-plt.xlim(0,n_iters)
-ax1.set_ylabel("LL")
-ax1.legend()
+for i in range(n_tests):
+    print("Test " + str(i+1))
+    C_true = GenerateSyntheticData(N, beta, hh_size_dist)
+    n = C_true.dot(dot_for_contacts)
+    y = C_true.dot(dot_for_cases)
+    C0 = FlatPartition(n, y, N, m)
+    llh_true = PartitionLogLikelihood(C_true, beta, m)
+    C_results,llhs,betas = RunPartitionsMCMC(C0, 1, m, n_iters,0.5)
 
-fig2,ax2 = plt.subplots()
-PlotContactsCasesByHHSize(C_true, ax2)
-for i,c in enumerate(C_start_true[int(n_iters*0.1)::int(n_iters/100)]):
-    contacts = np.zeros(m)
-    cases = np.zeros(m)
-    for n in range(1,m+1):
-        contacts[n-1] = n*sum(c[np.where(dot_for_contacts==n)])
-        cases[n-1] = (c[np.where(dot_for_contacts==n)]).dot(np.arange(n+1))
-    ax2.plot(np.arange(2,m+2),contacts,alpha=0.1,color = "green")
+
+
+
+
+
+    fig1,ax1 = plt.subplots()
+    ax1.plot(llhs)
+    ax1.hlines([llh_true],0,n_iters,linestyle = "--",label = "True partition LL",color = "blue")
+    ax1.set_xlim(0,n_iters)
+    ax1.set_ylabel("LL")
+    plt.savefig("Tests/N=100, beta=0.5/llh" + str(i) + ".png")
+    plt.close(fig1)
     
-final_size_distribution_homogeneous_no_intro(1, 1, beta, lambda t: np.exp(-t))
+    beta_samples = np.random.choice(betas[20000:],size=10000)
+    KDE = gaussian_kde(beta_samples)
+    X = np.linspace(beta-1,beta+1,1000)
+    Y = KDE(X)
+    
+    fig2,ax2 = plt.subplots()
+    ax2.plot(X,Y,label = "KDE",color = "black")
+    ax2.set_title("N = " + str(N) + ", " + r"$\beta=$" + str(beta) )
+    ax2.set_ylim(0,max(Y)*1.2)
+    ax2.vlines([beta],-1,100,linestyle = "--",label = "Actual value")
+    ax2.set_ylabel("Density")
+    ax2.set_xlabel("Transmission Parameter" + r"$(\beta )$")
+    plt.savefig("Tests/N=100, beta=0.5/KDE" + str(i) + ".png")
+    plt.close(fig2)
+    
+    fig3,ax3 = plt.subplots()
+    ax3.plot(betas)
+    ax3.set_xlim(0,n_iters)
+    ax3.set_title(r"$\beta$" + " trace plot" )
+    ax3.hlines([beta],-1,n_iters*1.2,linestyle = "--",label = "Actual value")
+    ax3.set_ylabel("Accepted Particles")
+    plt.savefig("Tests/N=100, beta=0.5/trace" + str(i) + ".png")
+    plt.close(fig3)
+    
+    max_comb = max(max_comb,max(Y))
+    ax_comb.plot(X,Y,color = "black", alpha = 0.2)
+    ax_comb.set_ylim(0,max_comb*1.2)
+    
+    
+        
+    FinishedBeep(i+1,250,600)
+fig_comb.savefig("Tests/N=100, beta=0.5/KDE_comb.png")
+print("Done")
+FinishedBeep(1,2000,600)
