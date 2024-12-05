@@ -3,6 +3,7 @@ import numpy as np
 from math import comb
 from scipy.linalg import solve
 from tqdm import tqdm
+from scipy.stats import norm
 
 
 
@@ -304,26 +305,29 @@ def PartitionLogLikelihood(C,beta,m):
         DESCRIPTION.
 
     """
-    ll= 0 
-    
-    phi = lambda t: np.exp(-t) # Constant infectious period
-    fs = [final_size_distribution_homogeneous_no_intro(n, 1, beta/n, phi) for n in range(1,m+1)]
-    for n in range(1,m+1):
-        total_hh_size_n = 0
-        for y in range(n+1):
-            k = IndexChange2dTo1d(n, y)
-            count = int(C[k])
-            if count>0:
-                ll += count * np.log(fs[n-1][y])
-                ll -= LogFactorial(count)
-                total_hh_size_n += count
-        if total_hh_size_n>0:
-            ll += LogFactorial(total_hh_size_n)
+    if beta<0:
+        return -np.inf
+    else:
+        ll= 0 
         
-    return ll
+        phi = lambda t: np.exp(-t) # Constant infectious period
+        fs = [final_size_distribution_homogeneous_no_intro(n, 1, beta/n, phi) for n in range(1,m+1)]
+        for n in range(1,m+1):
+            total_hh_size_n = 0
+            for y in range(n+1):
+                k = IndexChange2dTo1d(n, y)
+                count = int(C[k])
+                if count>0:
+                    ll += count * np.log(fs[n-1][y])
+                    ll -= LogFactorial(count)
+                    total_hh_size_n += count
+            if total_hh_size_n>0:
+                ll += LogFactorial(total_hh_size_n)
+            
+        return ll
 
 #%% Run MCMC
-def RunPartitionsMCMC(C0,beta,m,n_iters,n_moves=1):
+def RunPartitionsMCMC(C0,beta0,m,n_iters,beta_proposal_sd,n_moves=1):
     """
     Runs an MCMC over
 
@@ -353,21 +357,28 @@ def RunPartitionsMCMC(C0,beta,m,n_iters,n_moves=1):
     u = np.random.uniform(0,1,size=n_iters) #Accept/reject proposals
     u_infected = np.random.uniform(0,1,size=(n_iters,n_moves)) #Determine infected status of each proposed move
     
+    beta_proposal_offsets = norm(0,beta_proposal_sd).rvs(size=n_iters)
+    
     
     C = np.zeros((n_iters+1,max_k))
     C[0] = C0
     likelihoods = np.zeros(n_iters+1)
-    likelihoods[0] = PartitionLogLikelihood(C0, beta, m) 
+    likelihoods[0] = PartitionLogLikelihood(C0, beta0, m) 
+    betas = np.zeros(n_iters+1)
+    betas[0] = beta0
+    
 
-    for i in tqdm(range(n_iters),desc = "Running MCMC"):
-        remove_indices,place_indices,infected,log_proposal_prob = SelectIndices(C[i], dot_for_contacts, m, u_infected[i],n_moves) #Select 
+    for i in tqdm(range(n_iters),desc = "Running MCMC",mininterval=5):
+        remove_indices,place_indices,infected,log_proposal_prob = SelectIndices(C[i], dot_for_contacts, m, u_infected[i],n_moves) #Select s
         C_proposed = C[i].copy()
         for j,(k1,k2) in enumerate(zip(remove_indices,place_indices)):
             C_proposed = MoveContact(C_proposed, int(k1), int(k2), infected[j]) #Generate new partition given the proposed move
-        
+        #beta_proposed = beta_proposal.rvs()
         log_reverse_proposal_prob = RevProposalProbability(C_proposed, dot_for_contacts, remove_indices,place_indices, infected, m)
         
-        llh_proposed = PartitionLogLikelihood(C_proposed, beta, m)
+        beta_proposed = betas[i]+beta_proposal_offsets[i]
+        
+        llh_proposed = PartitionLogLikelihood(C_proposed, beta_proposed, m)
         llhA = llh_proposed - likelihoods[i]
         proposalA = log_reverse_proposal_prob-log_proposal_prob
         
@@ -376,9 +387,11 @@ def RunPartitionsMCMC(C0,beta,m,n_iters,n_moves=1):
         if A>np.log(u[i]):
             C[i+1] = C_proposed
             likelihoods[i+1] = llh_proposed
+            betas[i+1] = beta_proposed
         else:
             C[i+1]= C[i]
             likelihoods[i+1] = likelihoods[i]
+            betas[i+1] = betas[i]
         
             
-    return C,likelihoods
+    return C,likelihoods,betas
