@@ -1,5 +1,6 @@
 #%% Imports
 import numpy as np
+import matplotlib.pyplot as plt
 from math import comb
 from scipy.linalg import solve
 from tqdm import tqdm
@@ -325,9 +326,30 @@ def PartitionLogLikelihood(C,beta,m):
                 ll += LogFactorial(total_hh_size_n)
             
         return ll
-
+#%% Plotting
+def PlotPartition(C_true,C,i,llh,m,ax,dot_for_contacts):
+    contacts0 = np.zeros(m)
+    cases0 = np.zeros(m)
+    contacts = np.zeros(m)
+    cases = np.zeros(m)
+    for n in range(1,m+1):
+        contacts0[n-1] = n*sum(C_true[np.where(dot_for_contacts==n)])
+        cases0[n-1] = (C_true[np.where(dot_for_contacts==n)]).dot(np.arange(n+1))
+        
+        contacts[n-1] = n*sum(C[np.where(dot_for_contacts==n)])
+        cases[n-1] = (C[np.where(dot_for_contacts==n)]).dot(np.arange(n+1))
+        SAR = cases[n-1]/contacts[n-1]
+        plt.text(n+0.5, contacts[n-1]+10,"SAR = " + str(round(SAR,2)))
+    plt.text(0.5,max(contacts),str(i) + "   " + str(llh))
+    ax.bar(np.arange(2,m+2),contacts,label = "Contacts")
+    ax.bar(np.arange(2,m+2),cases,label = "Cases")
+    ax.bar(np.arange(2,m+2),contacts0,alpha=0.5)
+    ax.bar(np.arange(2,m+2),cases0,alpha= 0.5)
+    ax.set_xlabel("Household size")
+    ax.set_ylabel("Count")
+    ax.legend()
 #%% Run MCMC
-def RunPartitionsMCMC(C0,beta0,m,n_iters,beta_proposal_sd,n_moves=1):
+def RunPartitionsMCMC(C0,beta0,m,n_iters,beta_proposal_sd,n_moves=1,display_partitions = False,C_true=None):
     """
     Runs an MCMC over
 
@@ -366,9 +388,20 @@ def RunPartitionsMCMC(C0,beta0,m,n_iters,beta_proposal_sd,n_moves=1):
     likelihoods[0] = PartitionLogLikelihood(C0, beta0, m) 
     betas = np.zeros(n_iters+1)
     betas[0] = beta0
-    
+    if display_partitions:
+        fig,ax = plt.subplots()
 
     for i in tqdm(range(n_iters),desc = "Running MCMC",mininterval=5):
+        
+        
+            
+        if i%1000==0 and display_partitions:
+            ax.clear()
+            PlotPartition(C_true,C[i],i,likelihoods[i], m, ax,dot_for_contacts)
+            plt.pause(0.01)
+            
+                
+        
         remove_indices,place_indices,infected,log_proposal_prob = SelectIndices(C[i], dot_for_contacts, m, u_infected[i],n_moves) #Select s
         C_proposed = C[i].copy()
         for j,(k1,k2) in enumerate(zip(remove_indices,place_indices)):
