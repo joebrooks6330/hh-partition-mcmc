@@ -302,8 +302,8 @@ def PartitionLogLikelihood(C,beta,m):
 
     Returns
     -------
-    ll : TYPE
-        DESCRIPTION.
+    ll : float
+        Log-likelihood of the partition given the parameter and 
 
     """
     if beta<0:
@@ -326,6 +326,13 @@ def PartitionLogLikelihood(C,beta,m):
                 ll += LogFactorial(total_hh_size_n)
             
         return ll
+    
+def PartitionEntropy(C,dot_for_contacts):
+    contacts = C*(dot_for_contacts)
+    log_contacts = [np.log(c) if c!=0 else 0 for c in contacts ]
+    
+    return -contacts.dot(log_contacts)
+    
 #%% Plotting
 def PlotPartition(C_true,C,i,llh,m,ax,dot_for_contacts):
     contacts0 = np.zeros(m)
@@ -384,10 +391,15 @@ def RunPartitionsMCMC(C0,beta0,m,n_iters,beta_proposal_sd,n_moves=1,display_part
     
     C = np.zeros((n_iters+1,max_k))
     C[0] = C0
+    
     likelihoods = np.zeros(n_iters+1)
     likelihoods[0] = PartitionLogLikelihood(C0, beta0, m) 
+    
     betas = np.zeros(n_iters+1)
     betas[0] = beta0
+    
+    entropies = np.zeros(n_iters+1)
+    entropies[0] = PartitionEntropy(C0, dot_for_contacts)
     if display_partitions:
         fig,ax = plt.subplots()
 
@@ -421,10 +433,12 @@ def RunPartitionsMCMC(C0,beta0,m,n_iters,beta_proposal_sd,n_moves=1,display_part
             C[i+1] = C_proposed
             likelihoods[i+1] = llh_proposed
             betas[i+1] = beta_proposed
+            entropies[i+1] = PartitionEntropy(C_proposed, dot_for_contacts)
         else:
             C[i+1]= C[i]
             likelihoods[i+1] = likelihoods[i]
             betas[i+1] = betas[i]
-        
+            entropies[i+1] = entropies[i]
             
-    return C,likelihoods,betas
+            
+    return C,likelihoods,betas,entropies
