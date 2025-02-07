@@ -4,3 +4,7 @@ frames/
 __pycache__/HH_case_partition_MCMC.cpython-311.pyc
 *.jpg
 *.pyc
+*.pdf
+*.pkl
+*.pickle
+size_of_P(D).py
