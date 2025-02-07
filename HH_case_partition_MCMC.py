@@ -4,7 +4,8 @@ import matplotlib.pyplot as plt
 from math import comb
 from scipy.linalg import solve
 from tqdm import tqdm
-from scipy.stats import norm
+from scipy.stats import norm, multinomial
+
 
 
 
@@ -329,48 +330,106 @@ def PartitionLogLikelihood(C,beta,m):
     
 def PartitionEntropy(C,dot_for_contacts):
     contacts = C*(dot_for_contacts)
-    log_contacts = [np.log(c) if c!=0 else 0 for c in contacts ]
+    total_contacts = C.dot(dot_for_contacts)
+    proportions = contacts/total_contacts
+    log_proportions = [np.log(c) if c!=0 else 0 for c in proportions ]
     
-    return -contacts.dot(log_contacts)
+    return -proportions.dot(log_proportions)
+
+def PartitionPriorProbability(C,partition_prior,dot_for_contacts,m):
+    """    Calculates the prior probability of a given partition.
+
+    Parameters
+    ----------
+    C : np.ndarray
+        Partition of contacts and cases.
+    partition_prior : np.ndarray
+        Prior probabilities for each partition.
+    dot_for_contacts : np.ndarray
+        Array representing the dot product for contacts.
+    m : int
+        Maximum size of a household.
+
+    Returns
+    -------
+    prior_prob : float
+        Log of the prior probability of the partition.
+    """
+    if partition_prior is None:
+        return 1
+    x = np.array([C.dot(dot_for_contacts==n) for n in range(1,m+1)])
+    prior_prob = multinomial.logpmf(x = x, n = sum(x), p = partition_prior)
+
+    return prior_prob
+
+
+
     
 #%% Plotting
-def PlotPartition(C_true,C,i,llh,m,ax,dot_for_contacts):
-    contacts0 = np.zeros(m)
-    cases0 = np.zeros(m)
+def PlotPartition(C,m,dot_for_contacts,llh=None,i=None,ax=None):
+    if ax == None:
+        fig,ax = plt.subplots()
+
     contacts = np.zeros(m)
     cases = np.zeros(m)
     for n in range(1,m+1):
-        contacts0[n-1] = n*sum(C_true[np.where(dot_for_contacts==n)])
-        cases0[n-1] = (C_true[np.where(dot_for_contacts==n)]).dot(np.arange(n+1))
-        
         contacts[n-1] = n*sum(C[np.where(dot_for_contacts==n)])
         cases[n-1] = (C[np.where(dot_for_contacts==n)]).dot(np.arange(n+1))
         SAR = cases[n-1]/contacts[n-1]
         plt.text(n+0.5, contacts[n-1]+10,"SAR = " + str(round(SAR,2)))
-    plt.text(0.5,max(contacts),str(i) + "   " + str(llh))
+    if llh!=None:
+        if i!=None:
+            plt.text(0.5,max(contacts),str(i) + "   " + str(llh))
+        else:
+            plt.text(0.5,max(contacts),str(llh))
+    else:
+        if i!=None:
+            plt.text(0.5,max(contacts),str(llh))
+
+
     ax.bar(np.arange(2,m+2),contacts,label = "Contacts")
     ax.bar(np.arange(2,m+2),cases,label = "Cases")
-    ax.bar(np.arange(2,m+2),contacts0,alpha=0.5)
-    ax.bar(np.arange(2,m+2),cases0,alpha= 0.5)
     ax.set_xlabel("Household size")
     ax.set_ylabel("Count")
     ax.legend()
 #%% Run MCMC
-def RunPartitionsMCMC(C0,beta0,m,n_iters,beta_proposal_sd,n_moves=1,display_partitions = False,C_true=None):
+def RunPartitionsMCMC(C0: np.ndarray,
+    beta0: float,
+    m: int,
+    n_iters: int,
+    beta_proposal_sd: float,
+    n_moves: int = 1,
+    display_partitions: bool = False,
+    verbose: bool = True,
+    partition_prior: np.ndarray = None,
+    beta_prior = None):
     """
-    Runs an MCMC over
+    Given a number of primary cases, secondary contacts and cases (encoded in C0), this function runs an MCMC to fit a transmission rate.
+    Aswell as running a traditional MetHast MCMC with Gaussian proposals, it also runs through partitions of the secondary cases/contacts
+    into households, assuming 1 primary case per household, that are compatible with the data.
 
     Parameters
     ----------
-    C : np.ndarray length k_max
+    C0 : np.ndarray length k_max
         Initial partition of contacts and cases
-    beta : float
-        Person-to-person rate of transmission
+    beta0 : float
+        Initial person-to-person rate of transmission
     m : int
         Maximum size of a household
     n_iters : int
         Number of iterations the MCMC will run for
-
+    beta_proposal_sd: float
+        Standard deviation of the Gaussian proposal distribution for the transmission parameter
+    n_moves : int
+        The number of contacts which are moved for each proposed new partition
+    display_partitions : bool
+        If True, every 1000 partitions are displayed as a bar chart using matplotlib.pyplot
+    verbose: bool
+        If True, tqdm loading bar is shown for MCMC 
+    partition_prior : np.ndarray
+        A probability vector of the multinomial prior on the size of households. 
+    beta_prior : function, optional
+        A function that returns the log prior probability of the transmission rate beta (default is lambda beta: 0)
     Returns
     -------
     C : np.ndarray (n_iters+1,max_k)
@@ -379,66 +438,109 @@ def RunPartitionsMCMC(C0,beta0,m,n_iters,beta_proposal_sd,n_moves=1,display_part
         Log-likelihood of each accepted partition. Calculated by PartitionLogLikelihood
 
     """
+
+    #Type checking
+    if not isinstance(C0, np.ndarray):
+        raise ValueError("C0 must be a numpy array")
+    if not isinstance(beta0, (int, float)) or beta0 <= 0:
+        raise ValueError("beta0 must be a positive number")
+    if not isinstance(m, int) or m <= 0:
+        raise ValueError("m must be a positive integer")
+    if not isinstance(n_iters, int) or n_iters <= 0:
+        raise ValueError("n_iters must be a positive integer")
+    if not isinstance(beta_proposal_sd, (int, float)) or beta_proposal_sd <= 0:
+        raise ValueError("beta_proposal_sd must be a positive number")
+    if not isinstance(n_moves, int) or n_moves <= 0:
+        raise ValueError("n_moves must be a positive integer")
+    
     dot_for_contacts = np.concatenate([np.zeros(n+1)+n for n in range(1,m+1)])
     max_k = len(C0)
     
     #Generate random numbers
-    u = np.random.uniform(0,1,size=n_iters) #Accept/reject proposals
+    u = np.log(np.random.uniform(0,1,size=n_iters)) #Accept/reject proposals
     u_infected = np.random.uniform(0,1,size=(n_iters,n_moves)) #Determine infected status of each proposed move
     
+    #Generate random offsets for beta proposals all at once
     beta_proposal_offsets = norm(0,beta_proposal_sd).rvs(size=n_iters)
     
-    
+    #Initialise arrays to store partitions
     C = np.zeros((n_iters+1,max_k))
     C[0] = C0
     
+    #Initialise array to store likelihoods
     likelihoods = np.zeros(n_iters+1)
     likelihoods[0] = PartitionLogLikelihood(C0, beta0, m) 
+
+    #Initialise array to store prior probabilities for partitions
+    part_prior_probs = np.zeros(n_iters+1)
+    part_prior_probs[0] = PartitionPriorProbability(C[0],partition_prior,dot_for_contacts,m)
+
+    #Initialise array to store prior probabilities for beta (transmission rate)
+    beta_prior_probs = np.zeros(n_iters+1)
+    beta_prior_probs[0] = beta_prior(beta0) if beta_prior is not None else 0
     
+    #Initialise array to store beta values
     betas = np.zeros(n_iters+1)
     betas[0] = beta0
-    
+
+    #Initialise array to store entropy values
     entropies = np.zeros(n_iters+1)
     entropies[0] = PartitionEntropy(C0, dot_for_contacts)
+    
+    #If display_partitions is True, set up the pyplot figure
     if display_partitions:
         fig,ax = plt.subplots()
 
-    for i in tqdm(range(n_iters),desc = "Running MCMC",mininterval=5):
-        
-        
-            
+    #Start loop, displaying a loading bar if verbose is True
+    for i in (tqdm(range(n_iters),desc = "Running MCMC",mininterval=5) if verbose else range(n_iters)):
+
+        #If display_partitions is True, display the partition every 1000 iterations 
         if i%1000==0 and display_partitions:
             ax.clear()
-            PlotPartition(C_true,C[i],i,likelihoods[i], m, ax,dot_for_contacts)
+            PlotPartition(C[i],m,dot_for_contacts,llh=likelihoods[i],i=i,ax=ax)
             plt.pause(0.01)
             
                 
-        
-        remove_indices,place_indices,infected,log_proposal_prob = SelectIndices(C[i], dot_for_contacts, m, u_infected[i],n_moves) #Select s
-        C_proposed = C[i].copy()
+        #Select indices and infected status for the proposed move to new partition
+        remove_indices,place_indices,infected,log_proposal_prob = SelectIndices(C[i], dot_for_contacts, m, u_infected[i],n_moves) 
+        C_proposed = C[i].copy() #Copy the current partition
         for j,(k1,k2) in enumerate(zip(remove_indices,place_indices)):
             C_proposed = MoveContact(C_proposed, int(k1), int(k2), infected[j]) #Generate new partition given the proposed move
-        #beta_proposed = beta_proposal.rvs()
+
+        #Calculate reverse proposal probability
         log_reverse_proposal_prob = RevProposalProbability(C_proposed, dot_for_contacts, remove_indices,place_indices, infected, m)
         
         beta_proposed = betas[i]+beta_proposal_offsets[i]
         
         llh_proposed = PartitionLogLikelihood(C_proposed, beta_proposed, m)
         llhA = llh_proposed - likelihoods[i]
+
         proposalA = log_reverse_proposal_prob-log_proposal_prob
-        
+
+        part_prior_proposed = PartitionPriorProbability(C_proposed,partition_prior,dot_for_contacts,m)
+        beta_prior_proposed = beta_prior(beta_proposed) if beta_prior is not None else 0
+        priorA = part_prior_proposed-part_prior_probs[i] + beta_prior_proposed - beta_prior_probs[i]
+
         #Decide accept of reject
-        A = llhA+proposalA
-        if A>np.log(u[i]):
+        A = llhA + proposalA + priorA
+        if A>u[i]:
             C[i+1] = C_proposed
             likelihoods[i+1] = llh_proposed
+            part_prior_probs[i+1] = part_prior_proposed
+            beta_prior_probs[i+1] = beta_prior_proposed
             betas[i+1] = beta_proposed
             entropies[i+1] = PartitionEntropy(C_proposed, dot_for_contacts)
         else:
             C[i+1]= C[i]
             likelihoods[i+1] = likelihoods[i]
+            part_prior_probs[i+1] = part_prior_probs[i]
+            beta_prior_probs[i+1] = beta_prior_probs[i]
             betas[i+1] = betas[i]
             entropies[i+1] = entropies[i]
             
             
-    return C,likelihoods,betas,entropies
+    return C,likelihoods,betas,part_prior_probs,beta_prior_probs,entropies
+
+
+
+
