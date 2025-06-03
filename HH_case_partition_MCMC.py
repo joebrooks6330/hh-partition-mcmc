@@ -288,9 +288,34 @@ def LogFactorial(a):
         result += np.log(i)
     return result
 
+<<<<<<< Updated upstream
 def PartitionLogLikelihood(C,beta,m):
+=======
+def FinalSizeDistributions(m: int,
+                           beta: float,
+                           eta: float =1.0):
     """
-    Calculates the log-likelihood for a given partition and transmission parameter. Assume frequency based mixing and constant infectious period.
+    Returns a list of final size distributitons for each of the household sizes from 1 to m. Assumes frequency based mixing and constant infectious period.
+    
+    Parameters
+    ----------
+    m : int 
+        Maximum size of a household
+    beta : 
+        float Person-to-person rate of transmission
+    Returns
+    -------
+    fs : list
+        List of final size distributions for each household size from 1 to m
+    """
+    phi = lambda t: np.exp(-t) # Constant infectious period
+    fs = [final_size_distribution_homogeneous_no_intro(n, 1, beta/(n**eta), phi) for n in range(1,m+1)]
+    return fs
+
+def PartitionLogLikelihood(C,beta,m,fs):
+>>>>>>> Stashed changes
+    """
+    Calculates the log-likelihood for a given partition and transmission parameter.
 
     Parameters
     ----------
@@ -399,10 +424,15 @@ def RunPartitionsMCMC(C0: np.ndarray,
     n_iters: int,
     beta_proposal_sd: float,
     n_moves: int = 1,
+<<<<<<< Updated upstream
     display_partitions: bool = False,
+=======
+    thin: int = 1,
+>>>>>>> Stashed changes
     verbose: bool = True,
-    partition_prior: np.ndarray = None,
-    beta_prior = None):
+    partition_prior: np.ndarray = np.zeros(1),
+    beta_prior = lambda b: 0 if (b>0 and b<100) else -np.inf,
+    eta: float = 1):
     """
     Given a number of primary cases, secondary contacts and cases (encoded in C0), this function runs an MCMC to fit a transmission rate.
     Aswell as running a traditional MetHast MCMC with Gaussian proposals, it also runs through partitions of the secondary cases/contacts
@@ -410,10 +440,10 @@ def RunPartitionsMCMC(C0: np.ndarray,
 
     Parameters
     ----------
-    C0 : np.ndarray length k_max
+    C0 : np.ndarray length k_max (k_max = 0.5*(m+2)*(m-1))
         Initial partition of contacts and cases
     beta0 : float
-        Initial person-to-person rate of transmission
+        Initial parameter value for person-to-person rate of transmission rate
     m : int
         Maximum size of a household
     n_iters : int
@@ -422,14 +452,14 @@ def RunPartitionsMCMC(C0: np.ndarray,
         Standard deviation of the Gaussian proposal distribution for the transmission parameter
     n_moves : int
         The number of contacts which are moved for each proposed new partition
-    display_partitions : bool
-        If True, every 1000 partitions are displayed as a bar chart using matplotlib.pyplot
     verbose: bool
         If True, tqdm loading bar is shown for MCMC 
     partition_prior : np.ndarray
         A probability vector of the multinomial prior on the size of households. 
     beta_prior : function, optional
         A function that returns the log prior probability of the transmission rate beta (default is lambda beta: 0)
+    eta : float
+        A parameter that can be changed to move between frequency (eta=1) and density dependent (eta=0) mixing. Default is 1.
     Returns
     -------
     C : np.ndarray (n_iters+1,max_k)
@@ -453,6 +483,12 @@ def RunPartitionsMCMC(C0: np.ndarray,
     if not isinstance(n_moves, int) or n_moves <= 0:
         raise ValueError("n_moves must be a positive integer")
     
+    if partition_prior == np.zeros(1):
+        #Check if partition_prior is provided, if not set to uniform prior
+        partition_prior = np.ones(m)/m
+    else:
+        partition_prior = partition_prior/np.sum(partition_prior) #Normalise prior
+    
     dot_for_contacts = np.concatenate([np.zeros(n+1)+n for n in range(1,m+1)])
     max_k = len(C0)
     
@@ -469,7 +505,13 @@ def RunPartitionsMCMC(C0: np.ndarray,
     
     #Initialise array to store likelihoods
     likelihoods = np.zeros(n_iters+1)
+<<<<<<< Updated upstream
     likelihoods[0] = PartitionLogLikelihood(C0, beta0, m) 
+=======
+    final_size_distributions = FinalSizeDistributions(m,beta0,eta)
+    final_size_distributions_proposed = final_size_distributions
+    likelihoods[0] = PartitionLogLikelihood(C0, beta0, m,final_size_distributions) 
+>>>>>>> Stashed changes
 
     #Initialise array to store prior probabilities for partitions
     part_prior_probs = np.zeros(n_iters+1)
@@ -486,6 +528,7 @@ def RunPartitionsMCMC(C0: np.ndarray,
     #Initialise array to store entropy values
     entropies = np.zeros(n_iters+1)
     entropies[0] = PartitionEntropy(C0, dot_for_contacts)
+<<<<<<< Updated upstream
     
     #If display_partitions is True, set up the pyplot figure
     if display_partitions:
@@ -501,6 +544,19 @@ def RunPartitionsMCMC(C0: np.ndarray,
             plt.pause(0.01)
             
                 
+=======
+
+    #Initialise array for CHOSEN INDICES
+    k1 = chosen_indices = np.zeros((n_iters,2))
+
+    #Start loop, displaying a loading bar if verbose is True
+    for i in (tqdm(range(n_iters),desc = "Running MCMC",mininterval=5) if verbose else range(n_iters)):
+        #If the current iteration is the last of a set of n_moves, propose new beta and generate new final size distributions
+        
+            
+
+
+>>>>>>> Stashed changes
         #Select indices and infected status for the proposed move to new partition
         remove_indices,place_indices,infected,log_proposal_prob = SelectIndices(C[i], dot_for_contacts, m, u_infected[i],n_moves) 
         C_proposed = C[i].copy() #Copy the current partition
@@ -508,11 +564,27 @@ def RunPartitionsMCMC(C0: np.ndarray,
             C_proposed = MoveContact(C_proposed, int(k1), int(k2), infected[j]) #Generate new partition given the proposed move
 
         #Calculate reverse proposal probability
+<<<<<<< Updated upstream
         log_reverse_proposal_prob = RevProposalProbability(C_proposed, dot_for_contacts, remove_indices,place_indices, infected, m)
         
         beta_proposed = betas[i]+beta_proposal_offsets[i]
         
         llh_proposed = PartitionLogLikelihood(C_proposed, beta_proposed, m)
+=======
+        log_reverse_proposal_prob = RevProposalProbability(C_proposed, dot_for_contacts, k1,k2, infected, m)
+        
+        if i%n_moves == n_moves-1:
+            beta_proposed = betas[i]+beta_proposal_offsets[i//n_moves]
+            final_size_distributions_proposed = FinalSizeDistributions(m,beta_proposed,eta)
+            llh_proposed = PartitionLogLikelihood(C_proposed, beta_proposed, m,final_size_distributions_proposed) 
+            beta_prior_proposed = beta_prior(beta_proposed) 
+        else:
+            beta_proposed = betas[i]
+            llh_proposed = PartitionLogLikelihood(C_proposed, beta_proposed, m,final_size_distributions)
+            beta_prior_proposed = beta_prior_probs[i]
+        
+
+>>>>>>> Stashed changes
         llhA = llh_proposed - likelihoods[i]
 
         proposalA = log_reverse_proposal_prob-log_proposal_prob
@@ -521,9 +593,12 @@ def RunPartitionsMCMC(C0: np.ndarray,
         beta_prior_proposed = beta_prior(beta_proposed) if beta_prior is not None else 0
         priorA = part_prior_proposed-part_prior_probs[i] + beta_prior_proposed - beta_prior_probs[i]
 
+
         #Decide accept of reject
+       
         A = llhA + proposalA + priorA
-        if A>u[i]:
+
+        if A>u[i] and beta_proposed>0:
             C[i+1] = C_proposed
             likelihoods[i+1] = llh_proposed
             part_prior_probs[i+1] = part_prior_proposed
