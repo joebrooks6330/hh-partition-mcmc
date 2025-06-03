@@ -67,7 +67,7 @@ def IndexChange1dTo2d(k):
     return(int(i),int(k-0.5*(i-1)*(i+2)))
 #%% Iteration functions - Functions that are run every iteration
 
-def SelectIndices(C,dot_for_contacts,m,u_inf,n_moves=1):
+def SelectIndices(C,dot_for_contacts,m,u_inf):
     """
     For a given case and contacts partition, selects indices and infected status for the movement of an individual. 
 
@@ -96,38 +96,32 @@ def SelectIndices(C,dot_for_contacts,m,u_inf,n_moves=1):
     """
     max_k = len(C)
     log_proposal_prob = 0
-    C_temp = C.copy()
+    
     max_k2 = int(0.5*(m+2)*(m-1))
     
-    remove_indices = np.zeros(n_moves)
-    place_indices = np.zeros(n_moves)
-    infected = np.zeros(n_moves)
-
-    for i in range(n_moves):
-        C_temp_contacts = C_temp*dot_for_contacts
-        k1 = int(np.random.choice(np.arange(2,max_k),p = C_temp_contacts[2:]/sum(C_temp_contacts[2:])))
-        log_proposal_prob += np.log(C_temp_contacts[k1]) - np.log(sum(C_temp_contacts[2:]))
-        C_temp[k1]-=1
-        remove_indices[i] = k1
+    C_temp = C.copy()
+    C_temp_contacts = C_temp*dot_for_contacts
+    k1 = int(np.random.choice(np.arange(2,max_k),p = C_temp_contacts[2:]/sum(C_temp_contacts[2:])))
+    log_proposal_prob += np.log(C_temp_contacts[k1]) - np.log(sum(C_temp_contacts[2:]))
+    C_temp[k1]-=1
         
-        k2 = int(np.random.choice(np.arange(max_k2),p = C_temp[:max_k2]/sum(C_temp[:max_k2])))
-        log_proposal_prob += np.log(C_temp[k2]) - np.log(sum(C_temp[:max_k2]))
-        C_temp[k2]-=1
-        place_indices[i] = k2
-        
-        n1,y1 = IndexChange1dTo2d(k1)
-        inf_check = (y1/n1)>u_inf[i]
-        if inf_check:
-            log_proposal_prob += np.log(y1) - np.log(n1)
-            infected[i] = 1
-        else:
-            log_proposal_prob += np.log(n1-y1) - np.log(n1)
+    k2 = int(np.random.choice(np.arange(max_k2),p = C_temp[:max_k2]/sum(C_temp[:max_k2])))
+    log_proposal_prob += np.log(C_temp[k2]) - np.log(sum(C_temp[:max_k2]))
+    
+    n1,y1 = IndexChange1dTo2d(k1)
+    inf_check = (y1/n1)>u_inf
+    if inf_check:
+        log_proposal_prob += np.log(y1) - np.log(n1)
+        infected = 1
+    else:
+        log_proposal_prob += np.log(n1-y1) - np.log(n1)
+        infected = 0
     
     
    
         
     
-    return remove_indices,place_indices,infected,log_proposal_prob
+    return k1,k2,infected,log_proposal_prob
 
 def MoveContact(C,k1,k2,infected):
     """
@@ -157,6 +151,8 @@ def MoveContact(C,k1,k2,infected):
     
     if (y1==0) and infected:
         raise ValueError("Index k1 corresponds to no secondary cases")
+    if C[k1] == 0:
+        raise ValueError("Chosen household bin must have atleast one household")
     
     n2,y2 = IndexChange1dTo2d(k2)
     
@@ -175,7 +171,7 @@ def MoveContact(C,k1,k2,infected):
     return C_new
 
 
-def RevProposalProbability(C_proposed,dot_for_contacts,remove_indices,place_indices,infected,m):
+def RevProposalProbability(C_proposed,dot_for_contacts,remove_index,place_index,infected,m):
     """
     Calculates the probability of proposing the current partition from the newly proposed one.
 
@@ -202,38 +198,34 @@ def RevProposalProbability(C_proposed,dot_for_contacts,remove_indices,place_indi
         DESCRIPTION.
 
     """
-    n_moves = len(remove_indices)
     log_proposal_prob = 0
     C_temp = C_proposed.copy()
     max_k1 = int(0.5*(m+2)*(m-1))
-    for i in range(n_moves):
             
-        k1 = int(remove_indices[i])
-        k2 = int(place_indices[i])
-        n1,y1 = IndexChange1dTo2d(k1)
-        n2,y2 = IndexChange1dTo2d(k2)
-        rev_remove_n = n2+1
-        rev_place_n = n1-1
-        rev_remove_y = y2
-        rev_place_y = y1
-        
-        if infected[i]:
-            rev_remove_y +=1
-            rev_place_y -=1
-        rev_place_k = IndexChange2dTo1d(rev_place_n, rev_place_y)
-        rev_remove_k = IndexChange2dTo1d(rev_remove_n, rev_remove_y)
-        
-        C_temp_contacts = C_temp*(dot_for_contacts)
-        log_proposal_prob +=  np.log(C_temp_contacts[rev_remove_k]) - np.log(sum(C_temp_contacts[2:]))
-        C_temp[rev_remove_k]-=1
-        
-        log_proposal_prob += np.log(C_temp[rev_place_k]) - np.log(sum(C_temp[:max_k1]))
-        C_temp[rev_place_k]-=1
-        
-        if infected[i]:
-            log_proposal_prob += np.log(rev_remove_y) - np.log(rev_remove_n)
-        else:
-            log_proposal_prob += np.log(rev_remove_n - rev_remove_y) - np.log(rev_remove_n)
+    n1,y1 = IndexChange1dTo2d(remove_index)
+    n2,y2 = IndexChange1dTo2d(place_index)
+    rev_remove_n = n2+1
+    rev_place_n = n1-1
+    rev_remove_y = y2
+    rev_place_y = y1
+    
+    if infected:
+        rev_remove_y +=1
+        rev_place_y -=1
+    rev_place_k = IndexChange2dTo1d(rev_place_n, rev_place_y)
+    rev_remove_k = IndexChange2dTo1d(rev_remove_n, rev_remove_y)
+    
+    C_temp_contacts = C_temp*(dot_for_contacts)
+    log_proposal_prob +=  np.log(C_temp_contacts[rev_remove_k]) - np.log(sum(C_temp_contacts[2:]))
+    C_temp[rev_remove_k]-=1
+    
+    log_proposal_prob += np.log(C_temp[rev_place_k]) - np.log(sum(C_temp[:max_k1]))
+    C_temp[rev_place_k]-=1
+    
+    if infected:
+        log_proposal_prob += np.log(rev_remove_y) - np.log(rev_remove_n)
+    else:
+        log_proposal_prob += np.log(rev_remove_n - rev_remove_y) - np.log(rev_remove_n)
     return log_proposal_prob
     
 #%%% Likelihood Functions
@@ -288,9 +280,6 @@ def LogFactorial(a):
         result += np.log(i)
     return result
 
-<<<<<<< Updated upstream
-def PartitionLogLikelihood(C,beta,m):
-=======
 def FinalSizeDistributions(m: int,
                            beta: float,
                            eta: float =1.0):
@@ -313,7 +302,6 @@ def FinalSizeDistributions(m: int,
     return fs
 
 def PartitionLogLikelihood(C,beta,m,fs):
->>>>>>> Stashed changes
     """
     Calculates the log-likelihood for a given partition and transmission parameter.
 
@@ -325,6 +313,8 @@ def PartitionLogLikelihood(C,beta,m,fs):
         Person-to-person rate of transmission
     m : int
         Maximum size of a household
+    fs : list
+        List of final size distributions for each household size from 1 to m
 
     Returns
     -------
@@ -424,11 +414,7 @@ def RunPartitionsMCMC(C0: np.ndarray,
     n_iters: int,
     beta_proposal_sd: float,
     n_moves: int = 1,
-<<<<<<< Updated upstream
-    display_partitions: bool = False,
-=======
     thin: int = 1,
->>>>>>> Stashed changes
     verbose: bool = True,
     partition_prior: np.ndarray = np.zeros(1),
     beta_prior = lambda b: 0 if (b>0 and b<100) else -np.inf,
@@ -494,10 +480,10 @@ def RunPartitionsMCMC(C0: np.ndarray,
     
     #Generate random numbers
     u = np.log(np.random.uniform(0,1,size=n_iters)) #Accept/reject proposals
-    u_infected = np.random.uniform(0,1,size=(n_iters,n_moves)) #Determine infected status of each proposed move
+    u_infected = np.random.uniform(0,1,size=(n_iters)) #Determine infected status of each proposed move
     
     #Generate random offsets for beta proposals all at once
-    beta_proposal_offsets = norm(0,beta_proposal_sd).rvs(size=n_iters)
+    beta_proposal_offsets = norm(0,beta_proposal_sd).rvs(size=n_iters//n_moves)
     
     #Initialise arrays to store partitions
     C = np.zeros((n_iters+1,max_k))
@@ -505,13 +491,9 @@ def RunPartitionsMCMC(C0: np.ndarray,
     
     #Initialise array to store likelihoods
     likelihoods = np.zeros(n_iters+1)
-<<<<<<< Updated upstream
-    likelihoods[0] = PartitionLogLikelihood(C0, beta0, m) 
-=======
     final_size_distributions = FinalSizeDistributions(m,beta0,eta)
     final_size_distributions_proposed = final_size_distributions
     likelihoods[0] = PartitionLogLikelihood(C0, beta0, m,final_size_distributions) 
->>>>>>> Stashed changes
 
     #Initialise array to store prior probabilities for partitions
     part_prior_probs = np.zeros(n_iters+1)
@@ -528,49 +510,20 @@ def RunPartitionsMCMC(C0: np.ndarray,
     #Initialise array to store entropy values
     entropies = np.zeros(n_iters+1)
     entropies[0] = PartitionEntropy(C0, dot_for_contacts)
-<<<<<<< Updated upstream
-    
-    #If display_partitions is True, set up the pyplot figure
-    if display_partitions:
-        fig,ax = plt.subplots()
 
-    #Start loop, displaying a loading bar if verbose is True
-    for i in (tqdm(range(n_iters),desc = "Running MCMC",mininterval=5) if verbose else range(n_iters)):
-
-        #If display_partitions is True, display the partition every 1000 iterations 
-        if i%1000==0 and display_partitions:
-            ax.clear()
-            PlotPartition(C[i],m,dot_for_contacts,llh=likelihoods[i],i=i,ax=ax)
-            plt.pause(0.01)
-            
-                
-=======
-
-    #Initialise array for CHOSEN INDICES
-    k1 = chosen_indices = np.zeros((n_iters,2))
+    #Initialise array for CHOSEN INDICESAdd commentMore actions
+    chosen_indices = np.zeros((n_iters,2))
 
     #Start loop, displaying a loading bar if verbose is True
     for i in (tqdm(range(n_iters),desc = "Running MCMC",mininterval=5) if verbose else range(n_iters)):
         #If the current iteration is the last of a set of n_moves, propose new beta and generate new final size distributions
-        
-            
 
-
->>>>>>> Stashed changes
         #Select indices and infected status for the proposed move to new partition
-        remove_indices,place_indices,infected,log_proposal_prob = SelectIndices(C[i], dot_for_contacts, m, u_infected[i],n_moves) 
+        k1,k2,infected,log_proposal_prob = SelectIndices(C[i], dot_for_contacts, m, u_infected[i]) 
         C_proposed = C[i].copy() #Copy the current partition
-        for j,(k1,k2) in enumerate(zip(remove_indices,place_indices)):
-            C_proposed = MoveContact(C_proposed, int(k1), int(k2), infected[j]) #Generate new partition given the proposed move
+        C_proposed = MoveContact(C_proposed, int(k1), int(k2), infected) #Generate new partition given the proposed move
 
         #Calculate reverse proposal probability
-<<<<<<< Updated upstream
-        log_reverse_proposal_prob = RevProposalProbability(C_proposed, dot_for_contacts, remove_indices,place_indices, infected, m)
-        
-        beta_proposed = betas[i]+beta_proposal_offsets[i]
-        
-        llh_proposed = PartitionLogLikelihood(C_proposed, beta_proposed, m)
-=======
         log_reverse_proposal_prob = RevProposalProbability(C_proposed, dot_for_contacts, k1,k2, infected, m)
         
         if i%n_moves == n_moves-1:
@@ -584,7 +537,6 @@ def RunPartitionsMCMC(C0: np.ndarray,
             beta_prior_proposed = beta_prior_probs[i]
         
 
->>>>>>> Stashed changes
         llhA = llh_proposed - likelihoods[i]
 
         proposalA = log_reverse_proposal_prob-log_proposal_prob
@@ -604,7 +556,9 @@ def RunPartitionsMCMC(C0: np.ndarray,
             part_prior_probs[i+1] = part_prior_proposed
             beta_prior_probs[i+1] = beta_prior_proposed
             betas[i+1] = beta_proposed
+            final_size_distributions = final_size_distributions_proposed
             entropies[i+1] = PartitionEntropy(C_proposed, dot_for_contacts)
+            
         else:
             C[i+1]= C[i]
             likelihoods[i+1] = likelihoods[i]
@@ -612,9 +566,11 @@ def RunPartitionsMCMC(C0: np.ndarray,
             beta_prior_probs[i+1] = beta_prior_probs[i]
             betas[i+1] = betas[i]
             entropies[i+1] = entropies[i]
+
+        chosen_indices[i] = [k1,k2]
             
             
-    return C,likelihoods,betas,part_prior_probs,beta_prior_probs,entropies
+    return C[::thin],likelihoods[::thin],betas[::thin],part_prior_probs[::thin],beta_prior_probs[::thin],entropies[::thin],chosen_indices[::thin]
 
 
 
