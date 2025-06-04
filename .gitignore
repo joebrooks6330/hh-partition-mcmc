@@ -8,3 +8,4 @@ __pycache__/HH_case_partition_MCMC.cpython-311.pyc
 *.pkl
 *.pickle
 size_of_P(D).py
+.idea/*
