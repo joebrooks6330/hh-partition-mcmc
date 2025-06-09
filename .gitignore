@@ -9,3 +9,4 @@ __pycache__/HH_case_partition_MCMC.cpython-311.pyc
 *.pickle
 size_of_P(D).py
 .idea/*
+results_notebook.ipynb
