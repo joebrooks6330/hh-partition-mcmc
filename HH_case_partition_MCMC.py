@@ -443,7 +443,7 @@ def RunPartitionsMCMC(C0: np.ndarray,
     partition_prior : np.ndarray
         A probability vector of the multinomial prior on the size of households. 
     beta_prior : function, optional
-        A function that returns the log prior probability of the transmission rate beta (default is lambda beta: 0)
+        A function that returns the log prior probability of the transmission rate beta (default is uniform prior on [0,100])
     eta : float
         A parameter that can be changed to move between frequency (eta=1) and density dependent (eta=0) mixing. Default is 1.
     Returns
@@ -469,7 +469,7 @@ def RunPartitionsMCMC(C0: np.ndarray,
     if not isinstance(n_moves, int) or n_moves <= 0:
         raise ValueError("n_moves must be a positive integer")
     
-    if partition_prior == np.zeros(1):
+    if (partition_prior == np.zeros(1)).all():
         #Check if partition_prior is provided, if not set to uniform prior
         partition_prior = np.ones(m)/m
     else:
