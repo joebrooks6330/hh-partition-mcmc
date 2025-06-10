@@ -326,9 +326,6 @@ def PartitionLogLikelihood(C,beta,m,fs):
         return -np.inf
     else:
         ll= 0 
-        
-        phi = lambda t: np.exp(-t) # Constant infectious period
-        fs = [final_size_distribution_homogeneous_no_intro(n, 1, beta/n, phi) for n in range(1,m+1)]
         for n in range(1,m+1):
             total_hh_size_n = 0
             for y in range(n+1):
@@ -410,15 +407,18 @@ def PlotPartition(C,m,dot_for_contacts,llh=None,i=None,ax=None):
 #%% Run MCMC
 def RunPartitionsMCMC(C0: np.ndarray,
     beta0: float,
+    eta0: float,
     m: int,
     n_iters: int,
     beta_proposal_sd: float,
+    eta_proposal_sd: float,
     n_moves: int = 1,
     thin: int = 1,
     verbose: bool = True,
     partition_prior: np.ndarray = np.zeros(1),
     beta_prior = lambda b: 0 if (b>0 and b<100) else -np.inf,
-    eta: float = 1):
+    eta_prior = lambda e: 0 if (e>=0 and e<=1) else -np.inf
+    ):
     """
     Given a number of primary cases, secondary contacts and cases (encoded in C0), this function runs an MCMC to fit a transmission rate.
     Aswell as running a traditional MetHast MCMC with Gaussian proposals, it also runs through partitions of the secondary cases/contacts
@@ -430,6 +430,8 @@ def RunPartitionsMCMC(C0: np.ndarray,
         Initial partition of contacts and cases
     beta0 : float
         Initial parameter value for person-to-person rate of transmission rate
+    eta0 : float
+        Intitial parameter value that can move between frequency (eta=1) and density dependent (eta=0) mixing.
     m : int
         Maximum size of a household
     n_iters : int
@@ -444,8 +446,9 @@ def RunPartitionsMCMC(C0: np.ndarray,
         A probability vector of the multinomial prior on the size of households. 
     beta_prior : function, optional
         A function that returns the log prior probability of the transmission rate beta (default is lambda beta: 0)
-    eta : float
-        A parameter that can be changed to move between frequency (eta=1) and density dependent (eta=0) mixing. Default is 1.
+    eta_prior : function, optional
+        A function that returns the log prior probability of the eta parameter (default is lambda eta: 0)
+    
     Returns
     -------
     C : np.ndarray (n_iters+1,max_k)
@@ -469,7 +472,7 @@ def RunPartitionsMCMC(C0: np.ndarray,
     if not isinstance(n_moves, int) or n_moves <= 0:
         raise ValueError("n_moves must be a positive integer")
     
-    if partition_prior == np.zeros(1):
+    if (partition_prior == np.zeros(1)).all():
         #Check if partition_prior is provided, if not set to uniform prior
         partition_prior = np.ones(m)/m
     else:
@@ -484,6 +487,7 @@ def RunPartitionsMCMC(C0: np.ndarray,
     
     #Generate random offsets for beta proposals all at once
     beta_proposal_offsets = norm(0,beta_proposal_sd).rvs(size=n_iters//n_moves)
+    eta_proposal_offsets = norm(0,eta_proposal_sd).rvs(size=n_iters//n_moves)
     
     #Initialise arrays to store partitions
     C = np.zeros((n_iters+1,max_k))
@@ -491,7 +495,7 @@ def RunPartitionsMCMC(C0: np.ndarray,
     
     #Initialise array to store likelihoods
     likelihoods = np.zeros(n_iters+1)
-    final_size_distributions = FinalSizeDistributions(m,beta0,eta)
+    final_size_distributions = FinalSizeDistributions(m,beta0,eta0)
     final_size_distributions_proposed = final_size_distributions
     likelihoods[0] = PartitionLogLikelihood(C0, beta0, m,final_size_distributions) 
 
@@ -506,6 +510,14 @@ def RunPartitionsMCMC(C0: np.ndarray,
     #Initialise array to store beta values
     betas = np.zeros(n_iters+1)
     betas[0] = beta0
+
+    #Initialise array to store prior probabilities for beta (transmission rate)
+    eta_prior_probs = np.zeros(n_iters+1)
+    eta_prior_probs[0] = eta_prior(eta0) if beta_prior is not None else 0
+    
+    #Initialise array to store beta values
+    etas = np.zeros(n_iters+1)
+    etas[0] = eta0
 
     #Initialise array to store entropy values
     entropies = np.zeros(n_iters+1)
@@ -528,13 +540,17 @@ def RunPartitionsMCMC(C0: np.ndarray,
         
         if i%n_moves == n_moves-1:
             beta_proposed = betas[i]+beta_proposal_offsets[i//n_moves]
-            final_size_distributions_proposed = FinalSizeDistributions(m,beta_proposed,eta)
+            eta_proposed = etas[i]+eta_proposal_offsets[i//n_moves]
+            final_size_distributions_proposed = FinalSizeDistributions(m,beta_proposed,eta_proposed)
             llh_proposed = PartitionLogLikelihood(C_proposed, beta_proposed, m,final_size_distributions_proposed) 
-            beta_prior_proposed = beta_prior(beta_proposed) 
+            beta_prior_proposed = beta_prior(beta_proposed)
+            eta_prior_proposed = eta_prior(eta_proposed) 
         else:
             beta_proposed = betas[i]
+            eta_proposed = etas[i]
             llh_proposed = PartitionLogLikelihood(C_proposed, beta_proposed, m,final_size_distributions)
             beta_prior_proposed = beta_prior_probs[i]
+            eta_prior_proposed = eta_prior_probs[i]
         
 
         llhA = llh_proposed - likelihoods[i]
@@ -542,8 +558,8 @@ def RunPartitionsMCMC(C0: np.ndarray,
         proposalA = log_reverse_proposal_prob-log_proposal_prob
 
         part_prior_proposed = PartitionPriorProbability(C_proposed,partition_prior,dot_for_contacts,m)
-        beta_prior_proposed = beta_prior(beta_proposed) if beta_prior is not None else 0
-        priorA = part_prior_proposed-part_prior_probs[i] + beta_prior_proposed - beta_prior_probs[i]
+
+        priorA = part_prior_proposed-part_prior_probs[i] + beta_prior_proposed - beta_prior_probs[i] + eta_prior_proposed-eta_prior_probs[i]
 
 
         #Decide accept of reject
@@ -556,6 +572,8 @@ def RunPartitionsMCMC(C0: np.ndarray,
             part_prior_probs[i+1] = part_prior_proposed
             beta_prior_probs[i+1] = beta_prior_proposed
             betas[i+1] = beta_proposed
+            eta_prior_probs[i+1] = eta_prior_proposed
+            etas[i+1] = eta_proposed
             final_size_distributions = final_size_distributions_proposed
             entropies[i+1] = PartitionEntropy(C_proposed, dot_for_contacts)
             
@@ -565,12 +583,14 @@ def RunPartitionsMCMC(C0: np.ndarray,
             part_prior_probs[i+1] = part_prior_probs[i]
             beta_prior_probs[i+1] = beta_prior_probs[i]
             betas[i+1] = betas[i]
+            eta_prior_probs[i+1] = eta_prior_probs[i]
+            etas[i+1] = etas[i]
             entropies[i+1] = entropies[i]
 
         chosen_indices[i] = [k1,k2]
             
             
-    return C[::thin],likelihoods[::thin],betas[::thin],part_prior_probs[::thin],beta_prior_probs[::thin],entropies[::thin],chosen_indices[::thin]
+    return C[::thin],likelihoods[::thin],betas[::thin],etas[::thin],part_prior_probs[::thin],beta_prior_probs[::thin],eta_prior_probs[::thin],entropies[::thin],chosen_indices[::thin]
 
 
 
