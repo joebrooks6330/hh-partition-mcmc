@@ -65,6 +65,41 @@ def IndexChange1dTo2d(k):
         i = np.ceil((-3+np.sqrt(9+8+8*k))/2)
         
     return(int(i),int(k-0.5*(i-1)*(i+2)))
+
+#%% Partition ID conversion functions
+ascii_ords = np.concatenate([np.arange(48,58),np.arange(65,91),np.arange(97,123)])
+def convert_to_ascii_ords(i):
+    if i<10:
+        return 48+i
+    elif 10<=i<36:
+        return 65+i-10
+    elif 36<=i<=61:
+        return 97+i-36
+
+def partition_to_ID(C):
+    ID  = ""
+    for c_fl in C:
+        c = int(c_fl)
+        if c<= 61:
+            ID = ID +  "00" + chr(convert_to_ascii_ords(c))
+        elif c<= 62*62 - 1:
+            ID += "0" + chr(convert_to_ascii_ords(c//62)) + chr(convert_to_ascii_ords(c%62))
+        elif c<=62**3 - 1:
+            ID += chr(convert_to_ascii_ords(c//(62*62))) + chr(convert_to_ascii_ords((c//62)%62)) + chr(convert_to_ascii_ords(c%62))
+        else:
+            raise ValueError("Partition ID is too long. Maximum length is 3 characters per element.")
+    return ID
+
+convert_from_ascii_ords = {ord(c):i for i,c in enumerate("0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz")}
+
+def ID_to_partition(ID):
+    C = np.zeros(len(ID)//3)
+    for i in range(len(ID)//3):
+        c = ID[i*3:i*3+3]
+        C[i] = convert_from_ascii_ords[ord(c[0])]*62**2+ convert_from_ascii_ords[ord(c[1])]*62 +convert_from_ascii_ords[ord(c[2])]
+    return C
+
+
 #%% Functions for selecting indices of contacts to be moved
 
 def SelectIndicesLowInfo(C,dot_for_contacts,m,u_inf):
@@ -182,85 +217,6 @@ def SelectIndicesMediumInfo(C,dot_for_cases,m,u_inf):
 
     return k1,k2,True,log_proposal_prob
 
-def SelectIndices(C,dot_for_contacts,m,u_inf,info_level):
-    """
-    For a given case and contacts partition, selects indices and infected status for the movement of an individual. 
-
-    Parameters
-    ----------
-    C : np.ndarray length k_max
-        Partition of contacts and cases
-    dot_for_contacts : np.ndarray length k_max 
-        np.concatenate([np.zeros(n+1)+n for n in range(1,m+1)])
-    m : int
-        Maximum size of a household
-    u_inf : float
-        Random number between 0 and 1 used to determine infection status of the selected individual
-
-    Returns
-    -------
-    k1 : int
-        1D index of the type of household from which an individual will be removed
-    k2 : int
-        1D index of the type of household from which an individual will be added
-    infected : bool
-        Boolean value indicating if the individual being moved is infected
-    proposal_prob : float
-        Probability of selecting the proposed move given each individual s
-
-    """
-    if info_level not in ["low","medium","l","m"]:
-        raise ValueError("Invalid value for info_level")
-
-    C_temp = C.copy()
-    C_temp_contacts = C_temp*dot_for_contacts
-
-    log_proposal_prob = 0
-
-    #Choose first index 
-    max_k1 = len(C)
-    p1 = C_temp_contacts[2:]/sum(C_temp_contacts[2:])
-    k1 = int(np.random.choice(np.arange(2,max_k1),p = p1)) 
-    #Can't select hoyseholds with one contact because 
-    #low info: removing one leaves household empty 
-    #medium info: Swapping between households with one contact doesn't change anything
-    n1,y1 = IndexChange1dTo2d(k1)
-    log_proposal_prob += np.log(C_temp_contacts[k1]) - np.log(sum(C_temp_contacts[2:]))
-    
-    
-    
-    
-    #Choose infectious status of individual
-    inf_check = (y1/n1)>u_inf
-    if inf_check:
-        log_proposal_prob += np.log(y1) - np.log(n1)
-        infected = 1
-    else:
-        log_proposal_prob += np.log(n1-y1) - np.log(n1)
-        infected = 0
-    
-    #Choose second index
-    if info_level[0] == "l":
-        min_k2 = 0
-        max_k2 = int(0.5*(m+2)*(m-1))-1
-        C_temp[k1] -= 1
-    if info_level[0] == "m":
-        if infected:
-            min_k2 = IndexChange2dTo1d(n1,0)
-            max_k2 = IndexChange2dTo1d(n1,n1-1)
-        else:   
-            min_k2 = IndexChange2dTo1d(n1,1)
-            max_k2 = IndexChange2dTo1d(n1,n1)
-    
-    p2 = C_temp[min_k2:max_k2+1]/sum(C_temp[min_k2:max_k2+1]) # type: ignore
-    k2 = int(np.random.choice(np.arange(min_k2,max_k2+1),p = p2)) # type: ignore
-    log_proposal_prob += np.log(C_temp[k2]) - np.log(sum(C_temp[min_k2:max_k2])) # type: ignore
-    
-   
-        
-    
-    return k1,k2,infected,log_proposal_prob
-
 
 select_indices_dict = {"l": SelectIndicesLowInfo,
                        "m": SelectIndicesMediumInfo,
@@ -337,157 +293,10 @@ def MoveContactMediumInfo(C,k1,k2,infected):
         C_new[k2+1] += 1
     return C_new
 
-def MoveContact(C,k1,k2,infected,info_level):
-    """
-    For a given case and contacts partition, indices and infected status returns a new partition for moving one individual of that infected status from a household of one type to another.
-
-    Parameters
-    ----------
-    C : np.ndarray length max_k
-        Partition of contacts and cases
-    k1 : int
-        1D index of the type of household from which an individual will be removed
-    k2 : int
-        1D index of the type of household from which an individual will be added
-    infected : bool
-        Boolean value indicating if the individual being moved is infected
-
-    Returns
-    -------
-    C_new : np.ndarray length max_k
-        New partition following the moving of an individual
-
-    """
-    if k1<2:
-        raise ValueError("Chosen household would be empty if individual was removed")
-        
-    n1,y1 = IndexChange1dTo2d(k1)
-    
-    if (y1==0) and infected:
-        raise ValueError("Index k1 corresponds to no secondary cases")
-    if C[k1] == 0:
-        raise ValueError("Chosen household bin must have atleast one household")
-    
-    n2,y2 = IndexChange1dTo2d(k2)
-    
-    C_new = C.copy()
-
-    if info_level[0] == "l":
-        C_new[k1] -= 1
-        C_new[k2] -= 1
-        if infected:
-            k3 = IndexChange2dTo1d(n1-1, y1-1)
-            k4 = IndexChange2dTo1d(n2+1, y2+1)
-        else:
-            k3 = IndexChange2dTo1d(n1-1, y1)
-            k4 = IndexChange2dTo1d(n2+1, y2)
-            
-        
-    
-    if info_level[0] == "m":
-        if k1==k2 and C_new[k1] == 1:
-            return C_new
-        
-        C_new[k1] -= 1
-        C_new[k2] -= 1
-        if infected:
-            k3 = IndexChange2dTo1d(n1,y1-1)
-            k4 = IndexChange2dTo1d(n2,y2+1)
-        else:
-            k3 = IndexChange2dTo1d(n1,y1+1)
-            k4 = IndexChange2dTo1d(n2,y2-1)
-    
-    C_new[k3] += 1 # type: ignore
-    C_new[k4] += 1 # type: ignore
-    return C_new
-
 move_contact_dict = {"l": MoveContactLowInfo,
                      "m": MoveContactMediumInfo,
                      "h": lambda C,k1,k2,I: C}
 #%% Function for calculating the reverse proposal probability 
-def RevProposalProbability(C_proposed,dot_for_contacts,remove_index,place_index,infected,m,info_level):
-    """
-    Calculates the probability of proposing the current partition from the newly proposed one.
-
-    Parameters
-    ----------
-    C_proposed : np.ndarray length max_k
-        Proposed new partition
-    C_current : np.ndarray length max_k
-        Current partition from previous accepted particle
-    dot_for_contacts : np.ndarray length k_max 
-        np.concatenate([np.zeros(n+1)+n for n in range(1,m+1)])
-    k1 : int
-        1D index of the type of household from which an individual will be removed
-    k2 : int
-        1D index of the type of household from which an individual will be added
-    infected : bool
-        Boolean value indicating if the individual being moved is infected
-    m : int
-        Maximum size of a household
-
-    Returns
-    -------
-    proposal_prob : TYPE
-        DESCRIPTION.
-
-    """
-    C_temp = C_proposed.copy()
-    C_temp_contacts = C_temp*(dot_for_contacts)
-    log_proposal_prob = 0
-    
-            
-    n1,y1 = IndexChange1dTo2d(remove_index)
-    n2,y2 = IndexChange1dTo2d(place_index)
-
-    if info_level[0] == "l":
-        rev_remove_n = n2+1
-        rev_place_n = n1-1
-        rev_remove_y = y2
-        rev_place_y = y1
-    
-        if infected:
-            rev_remove_y +=1
-            rev_place_y -=1
-        
-    
-    if info_level[0] == "m":
-        rev_remove_n = n2
-        rev_place_n = n1
-        rev_remove_y = y2
-        rev_place_y = y1
-        if infected:
-            rev_remove_y +=1
-            rev_place_y -= 1
-        else:
-            rev_remove_y -= 1
-            rev_place_y += 1
-    
-    rev_place_k = IndexChange2dTo1d(rev_place_n, rev_place_y) # type: ignore
-    rev_remove_k = IndexChange2dTo1d(rev_remove_n, rev_remove_y) # type: ignore
-    log_proposal_prob +=  np.log(C_temp_contacts[rev_remove_k]) - np.log(sum(C_temp_contacts[2:]))
-
-    if infected:
-        log_proposal_prob += np.log(rev_remove_y) - np.log(rev_remove_n) # type: ignore
-    else:
-        log_proposal_prob += np.log(rev_remove_n - rev_remove_y) - np.log(rev_remove_n) # type: ignore
-    
-    if info_level[0] == "l":
-        min_k2 = 0
-        max_k2 = int(0.5*(m+2)*(m-1))
-        C_temp[rev_remove_k]-=1
-    if info_level[0] == "m":
-        if infected:
-            min_k2 = IndexChange2dTo1d(rev_remove_n,0) # type: ignore
-            max_k2 = IndexChange2dTo1d(rev_remove_n,rev_remove_n-1) # type: ignore
-        else:   
-            min_k2 = IndexChange2dTo1d(rev_remove_n,1) # type: ignore
-            max_k2 = IndexChange2dTo1d(rev_remove_n,rev_remove_n) # type: ignore
-    log_proposal_prob += np.log(C_temp[rev_place_k]) - np.log(sum(C_temp[min_k2:max_k2])) # type: ignore
-    
-    
-    return log_proposal_prob
-
 def ReverseProposalProbabilityLowInfo(C_proposed,dot_for_contacts,k1,k2,infected,m):
     """
     Calculates the probability of proposing the current partition from the newly proposed one.
