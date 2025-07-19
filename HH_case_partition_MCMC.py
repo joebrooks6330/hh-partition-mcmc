@@ -75,6 +75,8 @@ def convert_to_ascii_ords(i):
         return 65+i-10
     elif 36<=i<=61:
         return 97+i-36
+    else:
+        return 62**3
 
 def partition_to_ID(C):
     ID  = ""
@@ -101,8 +103,7 @@ def ID_to_partition(ID):
 
 
 #%% Functions for selecting indices of contacts to be moved
-
-def SelectIndicesLowInfo(C,dot_for_contacts,m,u_inf):
+def SelectIndicesLowInfo(C,m,u_inf,LU_1D_to_2D):
     """
     For a given case and contacts partition, selects indices and infected status for the movement of an individual. 
 
@@ -137,7 +138,7 @@ def SelectIndicesLowInfo(C,dot_for_contacts,m,u_inf):
     log_proposal_prob = np.log(C_temp[k1]) - np.log(sum(C_temp[2:]))
     C_temp[k1] -= 1
     
-    n1,y1 = IndexChange1dTo2d(k1)
+    n1,y1 = LU_1D_to_2D[k1]
     
     #Choose infectious status of individual
     inf_check = (y1/n1)>u_inf
@@ -162,7 +163,7 @@ def SelectIndicesLowInfo(C,dot_for_contacts,m,u_inf):
     
     return k1,k2,infected,log_proposal_prob
 
-def SelectIndicesMediumInfo(C,dot_for_cases,m,u_inf):
+def SelectIndicesMediumInfo(C,dot_for_cases,LU_1D_to_2D,LU_2D_to_1D):
     """
     For a given case and contacts partition, selects indices and infected status for the movement of an individual. 
 
@@ -197,14 +198,13 @@ def SelectIndicesMediumInfo(C,dot_for_cases,m,u_inf):
     max_k1 = len(C)
     p1 = C_temp_cases[2:]/sum(C_temp_cases[2:]) #Choosing household with one contact doesn't change anything
     k1 = int(np.random.choice(np.arange(2,max_k1),p = p1)) 
-    n1,y1 = IndexChange1dTo2d(k1) 
+    n1,y1 = LU_1D_to_2D[k1] 
     log_proposal_prob += np.log(C_temp_cases[k1]) - np.log(sum(C_temp_cases[2:]))
     C_temp[k1] -= 1
     C_temp_noncases = C_temp*(n1-dot_for_cases) #Update contacts after removing one individual
-    
-    n1,y1 = IndexChange1dTo2d(k1)  
-    min_k2 = IndexChange2dTo1d(n1,0) # type: ignore
-    max_k2 = IndexChange2dTo1d(n1,n1-1) # type: ignore 
+ 
+    min_k2 = int(LU_2D_to_1D[n1,0]) # type: ignore
+    max_k2 = int(LU_2D_to_1D[n1,n1-1]) # type: ignore 
 
 
     if sum(C_temp[min_k2:max_k2+1]) == 0: #If there are no households of the type we want to swap with, we can't select a second index
@@ -218,12 +218,9 @@ def SelectIndicesMediumInfo(C,dot_for_cases,m,u_inf):
     return k1,k2,True,log_proposal_prob
 
 
-select_indices_dict = {"l": SelectIndicesLowInfo,
-                       "m": SelectIndicesMediumInfo,
-                       "h": lambda C,dot_for_contacts,m,u_inf: (0,0,0,0)}
 
 #%% Functions for moving contacts once selected
-def MoveContactLowInfo(C,k1,k2,infected):
+def MoveContactLowInfo(C,k1,k2,infected,LU_1D_to_2D,LU_2D_to_1D):
     """
     For a given case and contacts partition, indices and infected status returns a new partition for moving one individual of that infected status from a household of one type to another.
 
@@ -247,20 +244,21 @@ def MoveContactLowInfo(C,k1,k2,infected):
     C_new = C.copy()
     C_new[k1] -= 1
     C_new[k2] -= 1
-    n1,y1 = IndexChange1dTo2d(k1)
-    n2,y2 = IndexChange1dTo2d(k2)
+    n1,y1 = LU_1D_to_2D[k1]
+    n2,y2 = LU_1D_to_2D[k2]
     if infected:
-        k3 = IndexChange2dTo1d(n1-1, y1-1)
-        k4 = IndexChange2dTo1d(n2+1, y2+1)
+        k3 = int(LU_2D_to_1D[n1-1, y1-1])
+        k4 = int(LU_2D_to_1D[n2+1, y2+1])
     else:
-        k3 = IndexChange2dTo1d(n1-1, y1)
-        k4 = IndexChange2dTo1d(n2+1, y2)
+        k3 = int(LU_2D_to_1D[n1-1, y1])
+        k4 = int(LU_2D_to_1D[n2+1, y2])
+
     C_new[k3] +=  1 # type: ignore
     C_new[k4] += 1 # type: ignore
     
     return C_new
 
-def MoveContactMediumInfo(C,k1,k2,infected):
+def MoveContactMediumInfo(C,k1,k2):
     """
     For a given case and contacts partition, indices and infected status returns a new partition for moving one individual of that infected status from a household of one type to another.
 
@@ -293,11 +291,8 @@ def MoveContactMediumInfo(C,k1,k2,infected):
         C_new[k2+1] += 1
     return C_new
 
-move_contact_dict = {"l": MoveContactLowInfo,
-                     "m": MoveContactMediumInfo,
-                     "h": lambda C,k1,k2,I: C}
 #%% Function for calculating the reverse proposal probability 
-def ReverseProposalProbabilityLowInfo(C_proposed,dot_for_contacts,k1,k2,infected,m):
+def ReverseProposalProbabilityLowInfo(C_proposed,k1,k2,infected,m,LU_1D_to_2D,LU_2D_to_1D):
     """
     Calculates the probability of proposing the current partition from the newly proposed one.
 
@@ -324,20 +319,20 @@ def ReverseProposalProbabilityLowInfo(C_proposed,dot_for_contacts,k1,k2,infected
     """
     C_temp = C_proposed.copy()
     
-    n1,y1 = IndexChange1dTo2d(k1)
-    n2,y2 = IndexChange1dTo2d(k2)
+    n1,y1 = LU_1D_to_2D[k1]
+    n2,y2 = LU_1D_to_2D[k2]
 
     log_rev_proposal_prob = 0
 
     if infected:
-        k3 = IndexChange2dTo1d(n1-1, y1-1)
-        k4 = IndexChange2dTo1d(n2+1, y2+1)
+        k3 = int(LU_2D_to_1D[n1-1, y1-1])
+        k4 = int(LU_2D_to_1D[n2+1, y2+1])
         log_rev_proposal_prob += np.log(y2+1) - np.log(n2+1)
 
 
     else:
-        k3 = IndexChange2dTo1d(n1-1, y1)
-        k4 = IndexChange2dTo1d(n2+1, y2)
+        k3 = int(LU_2D_to_1D[n1-1, y1])
+        k4 = int(LU_2D_to_1D[n2+1, y2])
         log_rev_proposal_prob += np.log(n2+1-y2) - np.log(n2+1)
 
     
@@ -351,7 +346,7 @@ def ReverseProposalProbabilityLowInfo(C_proposed,dot_for_contacts,k1,k2,infected
 
     return log_rev_proposal_prob
 
-def ReverseProposalProbabilityMediumInfo(C_proposed,dot_for_cases,k1,k2,infected,m):
+def ReverseProposalProbabilityMediumInfo(C_proposed,dot_for_cases,k1,k2,LU_1D_to_2D,LU_2D_to_1D):
     """
     Calculates the probability of proposing the current partition from the newly proposed one.
 
@@ -381,10 +376,9 @@ def ReverseProposalProbabilityMediumInfo(C_proposed,dot_for_cases,k1,k2,infected
     else:
         k3 = k1 - 1 
         k4 = k2 + 1 
-        n1,y1 = IndexChange1dTo2d(k1)
-        n2,y2 = IndexChange1dTo2d(k2)
-        max_k = IndexChange2dTo1d(n1,n1-1)
-        min_k = IndexChange2dTo1d(n1,0)
+        n1,y1 = LU_1D_to_2D[k1]
+        max_k = int(LU_2D_to_1D[n1,n1-1])
+        min_k = int(LU_2D_to_1D[n1,0])
 
 
         C_proposed_cases = C_proposed*dot_for_cases
@@ -502,17 +496,16 @@ def PartitionLogLikelihood(C,beta,m,fs,LF):
         return -np.inf
     else:
         ll= 0 
+        k=0
         for n in range(1,m+1):
             #total_hh_size_n = 0
             for y in range(n+1):
-                k = IndexChange2dTo1d(n, y)
                 count = int(C[k])
                 if count>0:
                     ll += count * np.log(fs[n-1][y])
                     ll -= LF[count]
-                    #total_hh_size_n += count
-            #if total_hh_size_n>0:
-               # ll += LogFactorial(total_hh_size_n)
+                k+=1
+
             
         return ll
     
@@ -592,8 +585,8 @@ def RunPartitionsMCMC(C0: np.ndarray,
     thin: int = 1,
     verbose: bool = True,
     partition_prior: np.ndarray = np.zeros(1),
-    beta_prior = lambda b: 0 if (b>0 and b<100) else -np.inf,
-    eta_prior = lambda e: 0 if (e>=0) else -np.inf,
+    beta_logprior = lambda b: 0 if (b>0 and b<100) else -np.inf,
+    eta_logprior = lambda e: 0 if (e>=0) else -np.inf,
     info_level: str = "l"
     ):
     """
@@ -621,9 +614,9 @@ def RunPartitionsMCMC(C0: np.ndarray,
         If True, tqdm loading bar is shown for MCMC 
     partition_prior : np.ndarray
         A probability vector of the multinomial prior on the size of households. 
-    beta_prior : function, optional
+    beta_logprior : function, optional
         A function that returns the log prior probability of the transmission rate beta (default is lambda beta: 0)
-    eta_prior : function, optional
+    eta_logprior : function, optional
         A function that returns the log prior probability of the eta parameter (default is lambda eta: 0)
     
     Returns
@@ -651,9 +644,7 @@ def RunPartitionsMCMC(C0: np.ndarray,
     if info_level not in ["low","medium","high","l","m","h"]:
         raise ValueError("Invalid value for info_level")
     
-    SelectIndicesFunc = select_indices_dict[info_level[0]]
-    MoveContactFunc = move_contact_dict[info_level[0]]
-    ReverseProposalProbabilityFunc = reverse_proposal_probability_dict[info_level[0]]
+
 
     
     if (partition_prior == np.zeros(1)).all():
@@ -664,6 +655,7 @@ def RunPartitionsMCMC(C0: np.ndarray,
     
     dot_for_contacts = np.concatenate([np.zeros(n+1)+n for n in range(1,m+1)])
     dot_for_cases = np.concatenate([np.arange(0, n + 1) for n in range(1, m + 1)])
+    
     dot_for_dict = {"l": dot_for_contacts,
                     "m": dot_for_cases,
                     "h": dot_for_contacts}
@@ -684,7 +676,15 @@ def RunPartitionsMCMC(C0: np.ndarray,
 
     #Precalculate log factorials for likelihood calculations
     LF = LogFactorials(int(sum(C0))) #Log factorials for likelihood calculations
-    
+
+    #Precalculate look-up arrays for moving between 1D and 2D indexing
+    k_max = int(0.5*(m+3)*(m))
+    LU_1D_to_2D = np.array([IndexChange1dTo2d(int(k)) for k in range(k_max)])
+    LU_2D_to_1D = np.zeros((m+1,m+1))-0.5
+    for n in range(1,m+1):
+        for y in range(n+1):
+            LU_2D_to_1D[n,y] = IndexChange2dTo1d(n,y)
+        
     #Initialise array to store likelihoods
     likelihoods = np.zeros(n_iters+1)
     final_size_distributions = FinalSizeDistributions(m,beta0,eta0)
@@ -692,20 +692,20 @@ def RunPartitionsMCMC(C0: np.ndarray,
     likelihoods[0] = PartitionLogLikelihood(C0, beta0, m,final_size_distributions,LF)
 
     #Initialise array to store prior probabilities for partitions
-    part_prior_probs = np.zeros(n_iters+1)
-    part_prior_probs[0] = PartitionPriorProbability(C[0],partition_prior,dot_for_contacts,m)
+    part_logprior_probs = np.zeros(n_iters+1)
+    part_logprior_probs[0] = PartitionPriorProbability(C[0],partition_prior,dot_for_contacts,m)
 
     #Initialise array to store prior probabilities for beta (transmission rate)
-    beta_prior_probs = np.zeros(n_iters+1)
-    beta_prior_probs[0] = beta_prior(beta0) if beta_prior is not None else 0
+    beta_logprior_probs = np.zeros(n_iters+1)
+    beta_logprior_probs[0] = beta_logprior(beta0) if beta_logprior is not None else 0
     
     #Initialise array to store beta values
     betas = np.zeros(n_iters+1)
     betas[0] = beta0
 
     #Initialise array to store prior probabilities for beta (transmission rate)
-    eta_prior_probs = np.zeros(n_iters+1)
-    eta_prior_probs[0] = eta_prior(eta0) if beta_prior is not None else 0
+    eta_logprior_probs = np.zeros(n_iters+1)
+    eta_logprior_probs[0] = eta_logprior(eta0) if beta_logprior is not None else 0
     
     #Initialise array to store beta values
     etas = np.zeros(n_iters+1)
@@ -722,21 +722,30 @@ def RunPartitionsMCMC(C0: np.ndarray,
 
     #Start loop, displaying a loading bar if verbose is True
     for i in (tqdm(range(n_iters),desc = "Running MCMC",mininterval=5) if verbose else range(n_iters)):
+        #Select indices and infected status for the proposed move to new partition
+        if info_level[0] == "l":
+            k1,k2,infected,log_proposal_prob = SelectIndicesLowInfo(C[i],m, u_infected[i],LU_1D_to_2D) 
+            C_proposed = C[i].copy() #Copy the current partition
+            C_proposed = MoveContactLowInfo(C_proposed, int(k1), int(k2), infected, LU_1D_to_2D,LU_2D_to_1D) #Generate new partition given the proposed move
+            #Calculate reverse proposal probability
+            log_reverse_proposal_prob = ReverseProposalProbabilityLowInfo(C_proposed, k1,k2, infected, m, LU_1D_to_2D,LU_2D_to_1D)
         
-        if info_level[0] == "h":
+        elif info_level[0] == "m":
+            k1,k2,infected,log_proposal_prob = SelectIndicesMediumInfo(C[i],dot_for_cases,LU_1D_to_2D,LU_2D_to_1D) 
+            C_proposed = C[i].copy() #Copy the current partition
+            C_proposed = MoveContactMediumInfo(C_proposed, int(k1), int(k2)) #Generate new partition given the proposed move
+            #Calculate reverse proposal probability
+            log_reverse_proposal_prob = ReverseProposalProbabilityMediumInfo(C_proposed,dot_for_cases, k1,k2,LU_1D_to_2D,LU_2D_to_1D)
+
+        elif info_level[0] == "h":
             C_proposed = C[i].copy()
             k1 = 0
             k2 = 0
             infected = 0
             log_proposal_prob = 0
             log_reverse_proposal_prob = 0
-        else:
-            #Select indices and infected status for the proposed move to new partition
-            k1,k2,infected,log_proposal_prob = SelectIndicesFunc(C[i], dot_for_dict[info_level], m, u_infected[i]) 
-            C_proposed = C[i].copy() #Copy the current partition
-            C_proposed = MoveContactFunc(C_proposed, int(k1), int(k2), infected) #Generate new partition given the proposed move
-            #Calculate reverse proposal probability
-            log_reverse_proposal_prob = ReverseProposalProbabilityFunc(C_proposed, dot_for_dict[info_level], k1,k2, infected, m)
+            
+       
         
         #If the current iteration is the last of a set of n_moves, propose new beta and generate new final size distributions
         if i%n_moves == n_moves-1:
@@ -744,23 +753,23 @@ def RunPartitionsMCMC(C0: np.ndarray,
             eta_proposed = etas[i]+eta_proposal_offsets[i//n_moves]
             final_size_distributions_proposed = FinalSizeDistributions(m,beta_proposed,eta_proposed)
             llh_proposed = PartitionLogLikelihood(C_proposed, beta_proposed, m,final_size_distributions_proposed,LF) 
-            beta_prior_proposed = beta_prior(beta_proposed)
-            eta_prior_proposed = eta_prior(eta_proposed) 
+            beta_logprior_proposed = beta_logprior(beta_proposed)
+            eta_logprior_proposed = eta_logprior(eta_proposed) 
         else:
             beta_proposed = betas[i]
             eta_proposed = etas[i]
             llh_proposed = PartitionLogLikelihood(C_proposed, beta_proposed, m,final_size_distributions,LF)
-            beta_prior_proposed = beta_prior_probs[i]
-            eta_prior_proposed = eta_prior_probs[i]
+            beta_logprior_proposed = beta_logprior_probs[i]
+            eta_logprior_proposed = eta_logprior_probs[i]
         
 
         llhA = llh_proposed - likelihoods[i]
 
         proposalA = log_reverse_proposal_prob-log_proposal_prob
 
-        part_prior_proposed = PartitionPriorProbability(C_proposed,partition_prior,dot_for_contacts,m)
+        part_logprior_proposed = PartitionPriorProbability(C_proposed,partition_prior,dot_for_contacts,m)
 
-        priorA = part_prior_proposed-part_prior_probs[i] + beta_prior_proposed - beta_prior_probs[i] + eta_prior_proposed-eta_prior_probs[i]
+        priorA = part_logprior_proposed-part_logprior_probs[i] + beta_logprior_proposed - beta_logprior_probs[i] + eta_logprior_proposed-eta_logprior_probs[i]
 
 
         #Decide accept of reject
@@ -770,10 +779,10 @@ def RunPartitionsMCMC(C0: np.ndarray,
         if A>u[i] and beta_proposed>0:
             C[i+1] = C_proposed
             likelihoods[i+1] = llh_proposed
-            part_prior_probs[i+1] = part_prior_proposed
-            beta_prior_probs[i+1] = beta_prior_proposed
+            part_logprior_probs[i+1] = part_logprior_proposed
+            beta_logprior_probs[i+1] = beta_logprior_proposed
             betas[i+1] = beta_proposed
-            eta_prior_probs[i+1] = eta_prior_proposed
+            eta_logprior_probs[i+1] = eta_logprior_proposed
             etas[i+1] = eta_proposed
             final_size_distributions = final_size_distributions_proposed
             entropies[i+1] = PartitionEntropy(C_proposed, dot_for_contacts)
@@ -781,17 +790,19 @@ def RunPartitionsMCMC(C0: np.ndarray,
         else:
             C[i+1]= C[i]
             likelihoods[i+1] = likelihoods[i]
-            part_prior_probs[i+1] = part_prior_probs[i]
-            beta_prior_probs[i+1] = beta_prior_probs[i]
+            part_logprior_probs[i+1] = part_logprior_probs[i]
+            beta_logprior_probs[i+1] = beta_logprior_probs[i]
             betas[i+1] = betas[i]
-            eta_prior_probs[i+1] = eta_prior_probs[i]
+            eta_logprior_probs[i+1] = eta_logprior_probs[i]
             etas[i+1] = etas[i]
             entropies[i+1] = entropies[i]
 
         chosen_indices[i] = [k1,k2]
             
-            
-    return C[::thin],likelihoods[::thin],betas[::thin],etas[::thin],part_prior_probs[::thin],beta_prior_probs[::thin],eta_prior_probs[::thin],entropies[::thin],chosen_indices[::thin]
+    #Convert partitions to codes
+    C_results = C[::thin]
+    C_codes = [partition_to_ID(P) for P in C_results]       
+    return C_codes,likelihoods[::thin],betas[::thin],etas[::thin],part_logprior_probs[::thin],beta_logprior_probs[::thin],eta_logprior_probs[::thin],entropies[::thin],chosen_indices[::thin]
 
 
 
