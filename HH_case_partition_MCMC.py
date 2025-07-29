@@ -3,6 +3,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from math import comb
 from scipy.linalg import solve
+from numpy.linalg import cond
 from tqdm import tqdm
 from scipy.stats import norm, multinomial
 
@@ -391,10 +392,6 @@ def ReverseProposalProbabilityMediumInfo(C_proposed,dot_for_cases,k1,k2,LU_1D_to
 
         return log_rev_proposal_prob
 
-reverse_proposal_probability_dict = {"l": ReverseProposalProbabilityLowInfo,
-                                     "m": ReverseProposalProbabilityMediumInfo,
-                                     "h": lambda C_proposed,dot_for_cases,k1,k2,infected,m: 0}
-
 
     
 #%%% Likelihood Functions
@@ -424,8 +421,14 @@ def final_size_distribution_homogeneous_no_intro(n,m,beta,phi):
             B[j,w] = comb(j,w)/(comb(n,w)*phi((n-j)*beta)**(m+w))
             if B[j,w] == np.inf:
                 print(j,w)
-    ones = np.ones(n+1)        
-    P = solve(B, ones, lower= True)
+
+    ones = np.ones(n+1) 
+    if cond(B)> 1e10:  
+        #Matrix is ill-conditioned due to high transmission rate, approximate soluation with certain full final size
+        P = np.zeros(n+1)
+        P[-1] = 1
+    else:    
+        P = solve(B, ones, lower= True)
 
     return(P)
 
@@ -502,8 +505,12 @@ def PartitionLogLikelihood(C,beta,m,fs,LF):
             for y in range(n+1):
                 count = int(C[k])
                 if count>0:
-                    ll += count * np.log(fs[n-1][y])
-                    ll -= LF[count]
+                    if fs[n-1][y]<=0:
+                        ll += -np.inf
+                        break
+                    else:
+                        ll += count * np.log(fs[n-1][y])
+                        ll -= LF[count]
                 k+=1
 
             
@@ -585,7 +592,7 @@ def RunPartitionsMCMC(C0: np.ndarray,
     thin: int = 1,
     verbose: bool = True,
     partition_prior: np.ndarray = np.zeros(1),
-    beta_logprior = lambda b: 0 if (b>0 and b<100) else -np.inf,
+    beta_logprior = lambda b: 0 if (b>0 and b<10) else -np.inf,
     eta_logprior = lambda e: 0 if (e>=0) else -np.inf,
     info_level: str = "l"
     ):
@@ -643,7 +650,6 @@ def RunPartitionsMCMC(C0: np.ndarray,
         raise ValueError("n_moves must be a positive integer")
     if info_level not in ["low","medium","high","l","m","h"]:
         raise ValueError("Invalid value for info_level")
-    
 
 
     
@@ -655,10 +661,6 @@ def RunPartitionsMCMC(C0: np.ndarray,
     
     dot_for_contacts = np.concatenate([np.zeros(n+1)+n for n in range(1,m+1)])
     dot_for_cases = np.concatenate([np.arange(0, n + 1) for n in range(1, m + 1)])
-    
-    dot_for_dict = {"l": dot_for_contacts,
-                    "m": dot_for_cases,
-                    "h": dot_for_contacts}
 
     max_k = len(C0)
     
@@ -673,7 +675,7 @@ def RunPartitionsMCMC(C0: np.ndarray,
     #Initialise arrays to store partitions
     C = np.zeros((n_iters+1,max_k))
     C[0] = C0
-
+    
     #Precalculate log factorials for likelihood calculations
     LF = LogFactorials(int(sum(C0))) #Log factorials for likelihood calculations
 
@@ -723,27 +725,24 @@ def RunPartitionsMCMC(C0: np.ndarray,
     #Start loop, displaying a loading bar if verbose is True
     for i in (tqdm(range(n_iters),desc = "Running MCMC",mininterval=5) if verbose else range(n_iters)):
         #Select indices and infected status for the proposed move to new partition
+        C_proposed = C[i].copy() #Copy the current partition
+        log_reverse_proposal_prob = 0
+        log_proposal_prob = 0
+        k1 = 0
+        k2 = 0
+        
         if info_level[0] == "l":
             k1,k2,infected,log_proposal_prob = SelectIndicesLowInfo(C[i],m, u_infected[i],LU_1D_to_2D) 
-            C_proposed = C[i].copy() #Copy the current partition
             C_proposed = MoveContactLowInfo(C_proposed, int(k1), int(k2), infected, LU_1D_to_2D,LU_2D_to_1D) #Generate new partition given the proposed move
             #Calculate reverse proposal probability
             log_reverse_proposal_prob = ReverseProposalProbabilityLowInfo(C_proposed, k1,k2, infected, m, LU_1D_to_2D,LU_2D_to_1D)
         
         elif info_level[0] == "m":
             k1,k2,infected,log_proposal_prob = SelectIndicesMediumInfo(C[i],dot_for_cases,LU_1D_to_2D,LU_2D_to_1D) 
-            C_proposed = C[i].copy() #Copy the current partition
             C_proposed = MoveContactMediumInfo(C_proposed, int(k1), int(k2)) #Generate new partition given the proposed move
             #Calculate reverse proposal probability
             log_reverse_proposal_prob = ReverseProposalProbabilityMediumInfo(C_proposed,dot_for_cases, k1,k2,LU_1D_to_2D,LU_2D_to_1D)
 
-        elif info_level[0] == "h":
-            C_proposed = C[i].copy()
-            k1 = 0
-            k2 = 0
-            infected = 0
-            log_proposal_prob = 0
-            log_reverse_proposal_prob = 0
             
        
         
@@ -803,7 +802,4 @@ def RunPartitionsMCMC(C0: np.ndarray,
     C_results = C[::thin]
     C_codes = [partition_to_ID(P) for P in C_results]       
     return C_codes,likelihoods[::thin],betas[::thin],etas[::thin],part_logprior_probs[::thin],beta_logprior_probs[::thin],eta_logprior_probs[::thin],entropies[::thin],chosen_indices[::thin]
-
-
-
 
