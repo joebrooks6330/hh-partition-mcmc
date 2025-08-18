@@ -27,8 +27,8 @@ a = brentq(to_min,0,1,xtol = 1e-10) # Find the value of a that gives the same me
 hh_dist_split = [a,0.01,0.01,0.01,1-a] # type: ignore # Split household size distribution with same mean as UK distribution when weighted by size
 hh_dist_split_weighted = hh_dist_split_weighted_func(a) # Adjust distribution so that it is weighted by the size of the household
 
-hh_size_dist_dict = {"UK": hh_dist_UK_weighted,
-                     "split": hh_dist_split_weighted}
+hh_size_dist_dict = {"UK": hh_dist_UK,
+                     "split": hh_dist_split}
 
 #%% Synthetic data generation
 def GenerateSyntheticData(beta,eta,N,hh_size_dist):
@@ -75,20 +75,20 @@ else:
     print("Synthetic datasets not found, generating new datasets.")
 
     beta_values = [round(x,1) for x in np.arange(0.1,2.6,0.1)]
-    eta_values = [round(x,1) for x  in np.arange(0,1.25,0.25)]
+    eta_values = [round(x,1) for x  in np.arange(0,1.25,0.25)] #[0,0.2,0.5,0.7,1.0]
     N_hh_values = [25,100,250,1000]
-    hh_size_distributions_weighted_keys = ["UK","split"]
+    hh_size_distributions_keys = ["UK","split"]
     N_datasets = 10
 
 
 
     datasets = {beta: {eta: {N: {hh_dist_k:[]
-                                for hh_dist_k in hh_size_distributions_weighted_keys}
+                                for hh_dist_k in hh_size_distributions_keys}
                             for N in N_hh_values}
                     for eta in eta_values}
                 for beta in beta_values}
     
-    for theta in tqdm(product(beta_values,eta_values,N_hh_values,hh_size_distributions_weighted_keys)):
+    for theta in tqdm(product(beta_values,eta_values,N_hh_values,hh_size_distributions_keys)):
         for i in range(N_datasets):
             data = GenerateSyntheticData(theta[0],theta[1],theta[2],hh_size_dist_dict[theta[3]])
             datasets[theta[0]][theta[1]][theta[2]][theta[3]].append(data)

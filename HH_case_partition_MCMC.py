@@ -799,7 +799,6 @@ def RunPartitionsMCMC(C0: np.ndarray,
         chosen_indices[i] = [k1,k2]
             
     #Convert partitions to codes
-    C_results = C[::thin]
-    C_codes = [partition_to_ID(P) for P in C_results]       
-    return C_codes,likelihoods[::thin],betas[::thin],etas[::thin],part_logprior_probs[::thin],beta_logprior_probs[::thin],eta_logprior_probs[::thin],entropies[::thin],chosen_indices[::thin]
+    C_results = C[::thin]   
+    return C_results,likelihoods[::thin],betas[::thin],etas[::thin],part_logprior_probs[::thin],beta_logprior_probs[::thin],eta_logprior_probs[::thin],entropies[::thin],chosen_indices[::thin]
 
