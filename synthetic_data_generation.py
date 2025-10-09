@@ -5,7 +5,7 @@ from itertools import product
 from HH_case_partition_MCMC import final_size_distribution_homogeneous_no_intro,IndexChange2dTo1d
 from os import mkdir
 from os.path import isdir, isfile
-from pickle import dump
+from pickle import dump,load
 from tqdm import tqdm
 
 if not isdir("datasets"):
@@ -14,21 +14,29 @@ if not isdir("datasets"):
 
 #%% Houshold size distributions (UK and SPLIT)
 
-hh_dist_UK = [9698, 4526, 3961, 1249, 544]  # 2023 UK household size distribution from size 2 to 6+
+if isfile("datasets/household_size_distributions.pkl"):
+    with open("datasets/household_size_distributions.pkl","rb") as f:
+        hh_size_dist_dict = load(f)
+else:
+    print("Household size distributions not found, generating new distributions.")
+    #Source: https://www.ons.gov.uk/peoplepopulationandcommunity/birthsdeathsandmarriages/families/datasets/familiesandhouseholdsfamiliesandhouseholds (table 5)
+    hh_dist_UK = [9698, 4526, 3961, 1249, 544]  # 2023 UK household size distribution from size 2 to 6+
 
-hh_dist_UK_weighted = np.array([i*p for i,p in enumerate(hh_dist_UK,2)]) #Adjust distribution so that it is weighted by the size of the household
-hh_dist_UK_weighted = hh_dist_UK_weighted/sum(hh_dist_UK_weighted)
-UK_mu = np.dot(hh_dist_UK_weighted,np.arange(2,7,1))
+    hh_dist_UK_weighted = np.array([i*p for i,p in enumerate(hh_dist_UK,2)]) #Adjust distribution so that it is weighted by the size of the household
+    hh_dist_UK_weighted = hh_dist_UK_weighted/sum(hh_dist_UK_weighted)
+    UK_mu = np.dot(hh_dist_UK_weighted,np.arange(2,7,1))
 
-hh_dist_split_weighted_func = lambda x: np.array([p*i for i,p in  enumerate([x,0.01,0.01,0.01,1-x],2)])
-to_min = lambda x: np.dot(hh_dist_split_weighted_func(x)/sum(hh_dist_split_weighted_func(x)),np.arange(2,7,1)) - UK_mu
+    hh_dist_split_weighted_func = lambda x: np.array([p*i for i,p in  enumerate([x,0.01,0.01,0.01,1-x],2)])
+    to_min = lambda x: np.dot(hh_dist_split_weighted_func(x)/sum(hh_dist_split_weighted_func(x)),np.arange(2,7,1)) - UK_mu
 
-a = brentq(to_min,0,1,xtol = 1e-10) # Find the value of a that gives the same mean as the UK distribution when weighted by size
-hh_dist_split = [a,0.01,0.01,0.01,1-a] # type: ignore # Split household size distribution with same mean as UK distribution when weighted by size
-hh_dist_split_weighted = hh_dist_split_weighted_func(a) # Adjust distribution so that it is weighted by the size of the household
+    a = brentq(to_min,0,1,xtol = 1e-10) # Find the value of a that gives the same mean as the UK distribution when weighted by size
+    hh_dist_split = [a,0.01,0.01,0.01,1-a] # type: ignore # Split household size distribution with same mean as UK distribution when weighted by size
+    hh_dist_split_weighted = hh_dist_split_weighted_func(a) # Adjust distribution so that it is weighted by the size of the household
 
-hh_size_dist_dict = {"UK": hh_dist_UK,
-                     "split": hh_dist_split}
+    hh_size_dist_dict = {"UK": hh_dist_UK,
+                        "split": hh_dist_split}
+    with open("datasets/household_size_distributions.pkl","wb") as f:
+        dump(hh_size_dist_dict,f)
 
 #%% Synthetic data generation
 def GenerateSyntheticData(beta,eta,N,hh_size_dist):
@@ -69,16 +77,16 @@ def GenerateSyntheticData(beta,eta,N,hh_size_dist):
             C[index] += final_size_counts[k]
     return C
 
-if isfile("datasets/synthetic.pkl"):
+if isfile("datasets/synthetic_100.pkl"):
     print("Synthetic datasets have already been generated.")
 else: 
     print("Synthetic datasets not found, generating new datasets.")
 
-    beta_values = [round(x,1) for x in np.arange(0.1,2.6,0.1)]
-    eta_values = [round(x,1) for x  in np.arange(0,1.25,0.25)] #[0,0.2,0.5,0.7,1.0]
+    beta_values = [round(x,2) for x in np.arange(0.1,2.6,0.1)]
+    eta_values = [round(x,2) for x  in np.arange(0,1.25,0.25)] #[0,0.2,0.5,0.7,1.0]
     N_hh_values = [25,100,250,1000]
     hh_size_distributions_keys = ["UK","split"]
-    N_datasets = 10
+    N_datasets = 100
 
 
 
@@ -93,7 +101,7 @@ else:
             data = GenerateSyntheticData(theta[0],theta[1],theta[2],hh_size_dist_dict[theta[3]])
             datasets[theta[0]][theta[1]][theta[2]][theta[3]].append(data)
 
-    with open("datasets/synthetic.pkl","wb") as f:
+    with open("datasets/synthetic_100.pkl","wb") as f:
         dump(datasets,f)
 
 
