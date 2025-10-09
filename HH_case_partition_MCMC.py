@@ -588,12 +588,12 @@ def RunPartitionsMCMC(C0: np.ndarray,
     n_iters: int,
     beta_proposal_sd: float,
     eta_proposal_sd: float,
-    n_moves: int = 1,
+    p_beta_move: float = 0.1,
     thin: int = 1,
     verbose: bool = True,
     partition_prior: np.ndarray = np.zeros(1),
     beta_logprior = lambda b: 0 if (b>0 and b<10) else -np.inf,
-    eta_logprior = lambda e: 0 if (e>=0) else -np.inf,
+    eta_logprior = lambda e: 0 if (e>=0 and e<=1) else -np.inf,
     info_level: str = "l"
     ):
     """
@@ -615,8 +615,8 @@ def RunPartitionsMCMC(C0: np.ndarray,
         Number of iterations the MCMC will run for
     beta_proposal_sd: float
         Standard deviation of the Gaussian proposal distribution for the transmission parameter
-    n_moves : int
-        The number of contacts which are moved for each proposed new partition
+    p_beta_move : int
+        The probability of an MCMC step proposing a new beta as oppose to a move for the partition
     verbose: bool
         If True, tqdm loading bar is shown for MCMC 
     partition_prior : np.ndarray
@@ -646,8 +646,8 @@ def RunPartitionsMCMC(C0: np.ndarray,
         raise ValueError("n_iters must be a positive integer")
     if not isinstance(beta_proposal_sd, (int, float)) or beta_proposal_sd < 0:
         raise ValueError("beta_proposal_sd must be a positive number")
-    if not isinstance(n_moves, int) or n_moves <= 0:
-        raise ValueError("n_moves must be a positive integer")
+    if not isinstance(p_beta_move, float) or p_beta_move < 0 or p_beta_move>1 :
+        raise ValueError("p_beta_move must be a probability")
     if info_level not in ["low","medium","high","l","m","h"]:
         raise ValueError("Invalid value for info_level")
 
@@ -666,11 +666,14 @@ def RunPartitionsMCMC(C0: np.ndarray,
     
     #Generate random numbers
     u = np.log(np.random.uniform(0,1,size=n_iters)) #Accept/reject proposals
+    u_move_type = np.random.uniform(0,1,size=(n_iters))
+    move_type_beta_bools = u_move_type<p_beta_move
     u_infected = np.random.uniform(0,1,size=(n_iters)) #Determine infected status of each proposed move
     
     #Generate random offsets for beta proposals all at once
-    beta_proposal_offsets = norm(0,beta_proposal_sd).rvs(size=n_iters//n_moves)
-    eta_proposal_offsets = norm(0,eta_proposal_sd).rvs(size=n_iters//n_moves)
+    beta_proposal_offsets = norm(0,beta_proposal_sd).rvs(size=sum(move_type_beta_bools))
+    eta_proposal_offsets = norm(0,eta_proposal_sd).rvs(size=sum(move_type_beta_bools))
+    i_offsets = 0
     
     #Initialise arrays to store partitions
     C = np.zeros((n_iters+1,max_k))
@@ -725,42 +728,45 @@ def RunPartitionsMCMC(C0: np.ndarray,
     #Start loop, displaying a loading bar if verbose is True
     for i in (tqdm(range(n_iters),desc = "Running MCMC",mininterval=5) if verbose else range(n_iters)):
         #Select indices and infected status for the proposed move to new partition
-        C_proposed = C[i].copy() #Copy the current partition
-        log_reverse_proposal_prob = 0
-        log_proposal_prob = 0
-        k1 = 0
-        k2 = 0
-        
-        if info_level[0] == "l":
-            k1,k2,infected,log_proposal_prob = SelectIndicesLowInfo(C[i],m, u_infected[i],LU_1D_to_2D) 
-            C_proposed = MoveContactLowInfo(C_proposed, int(k1), int(k2), infected, LU_1D_to_2D,LU_2D_to_1D) #Generate new partition given the proposed move
-            #Calculate reverse proposal probability
-            log_reverse_proposal_prob = ReverseProposalProbabilityLowInfo(C_proposed, k1,k2, infected, m, LU_1D_to_2D,LU_2D_to_1D)
-        
-        elif info_level[0] == "m":
-            k1,k2,infected,log_proposal_prob = SelectIndicesMediumInfo(C[i],dot_for_cases,LU_1D_to_2D,LU_2D_to_1D) 
-            C_proposed = MoveContactMediumInfo(C_proposed, int(k1), int(k2)) #Generate new partition given the proposed move
-            #Calculate reverse proposal probability
-            log_reverse_proposal_prob = ReverseProposalProbabilityMediumInfo(C_proposed,dot_for_cases, k1,k2,LU_1D_to_2D,LU_2D_to_1D)
-
-            
-       
-        
+        C_proposed = C[i].copy() #Copy the current partition     
         #If the current iteration is the last of a set of n_moves, propose new beta and generate new final size distributions
-        if i%n_moves == n_moves-1:
-            beta_proposed = betas[i]+beta_proposal_offsets[i//n_moves]
-            eta_proposed = etas[i]+eta_proposal_offsets[i//n_moves]
+        if move_type_beta_bools[i]:           
+            beta_proposed = betas[i]+beta_proposal_offsets[i_offsets]
+            eta_proposed = etas[i]+eta_proposal_offsets[i_offsets]
+            i_offsets += 1
             final_size_distributions_proposed = FinalSizeDistributions(m,beta_proposed,eta_proposed)
-            llh_proposed = PartitionLogLikelihood(C_proposed, beta_proposed, m,final_size_distributions_proposed,LF) 
             beta_logprior_proposed = beta_logprior(beta_proposed)
             eta_logprior_proposed = eta_logprior(eta_proposed) 
+            log_reverse_proposal_prob = 0
+            log_proposal_prob = 0
+            k1 = 0
+            k2 = 0 
         else:
             beta_proposed = betas[i]
             eta_proposed = etas[i]
-            llh_proposed = PartitionLogLikelihood(C_proposed, beta_proposed, m,final_size_distributions,LF)
             beta_logprior_proposed = beta_logprior_probs[i]
             eta_logprior_proposed = eta_logprior_probs[i]
-        
+            if info_level[0] == "l":
+                k1,k2,infected,log_proposal_prob = SelectIndicesLowInfo(C[i],m, u_infected[i],LU_1D_to_2D) 
+                C_proposed = MoveContactLowInfo(C_proposed, int(k1), int(k2), infected, LU_1D_to_2D,LU_2D_to_1D) #Generate new partition given the proposed move
+                #Calculate reverse proposal probability
+                log_reverse_proposal_prob = ReverseProposalProbabilityLowInfo(C_proposed, k1,k2, infected, m, LU_1D_to_2D,LU_2D_to_1D)
+            
+            elif info_level[0] == "m":
+                k1,k2,infected,log_proposal_prob = SelectIndicesMediumInfo(C[i],dot_for_cases,LU_1D_to_2D,LU_2D_to_1D) 
+                C_proposed = MoveContactMediumInfo(C_proposed, int(k1), int(k2)) #Generate new partition given the proposed move
+                #Calculate reverse proposal probability
+                log_reverse_proposal_prob = ReverseProposalProbabilityMediumInfo(C_proposed,dot_for_cases, k1,k2,LU_1D_to_2D,LU_2D_to_1D)
+
+            elif info_level[0] == "h":
+                k1 = 0
+                k2 = 0 
+                log_proposal_prob = 0
+                log_reverse_proposal_prob = 0
+                
+                
+            
+        llh_proposed = PartitionLogLikelihood(C_proposed, beta_proposed, m,final_size_distributions_proposed,LF) 
 
         llhA = llh_proposed - likelihoods[i]
 
