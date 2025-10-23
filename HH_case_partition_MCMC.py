@@ -524,7 +524,7 @@ def PartitionEntropy(C,dot_for_contacts):
     
     return -proportions.dot(log_proportions)
 
-def PartitionPriorProbability(C,partition_prior,dot_for_contacts,m):
+def PartitionPriorProbability(C,partition_prior,dot_for_contacts,m,size_weighted):
     """    Calculates the prior probability of a given partition.
 
     Parameters
@@ -543,10 +543,15 @@ def PartitionPriorProbability(C,partition_prior,dot_for_contacts,m):
     prior_prob : float
         Log of the prior probability of the partition.
     """
-    if partition_prior is None:
+    if (partition_prior == np.zeros(1)).all():
         return 1
+    if size_weighted:
+        p = partition_prior
+    else:
+        p = partition_prior*np.arange(2,m+2)
+        p = p/np.sum(p)
     x = np.array([C.dot(dot_for_contacts==n) for n in range(1,m+1)])
-    prior_prob = multinomial.logpmf(x = x, n = sum(x), p = partition_prior)
+    prior_prob = multinomial.logpmf(x = x, n = sum(x), p = partition_prior)     
 
     return prior_prob
 
@@ -592,6 +597,7 @@ def RunPartitionsMCMC(C0: np.ndarray,
     thin: int = 1,
     verbose: bool = True,
     partition_prior: np.ndarray = np.zeros(1),
+    size_weighted: bool = False,
     beta_logprior = lambda b: 0 if (b>0 and b<10) else -np.inf,
     eta_logprior = lambda e: 0 if (e>=0 and e<=1) else -np.inf,
     info_level: str = "l"
@@ -656,6 +662,7 @@ def RunPartitionsMCMC(C0: np.ndarray,
     if (partition_prior == np.zeros(1)).all():
         #Check if partition_prior is provided, if not set to uniform prior
         partition_prior = np.ones(m)/m
+        size_weighted = True
     else:
         partition_prior = partition_prior/np.sum(partition_prior) #Normalise prior
     
@@ -772,7 +779,7 @@ def RunPartitionsMCMC(C0: np.ndarray,
 
         proposalA = log_reverse_proposal_prob-log_proposal_prob
 
-        part_logprior_proposed = PartitionPriorProbability(C_proposed,partition_prior,dot_for_contacts,m)
+        part_logprior_proposed = PartitionPriorProbability(C_proposed,partition_prior,dot_for_contacts,m,size_weighted)
 
         priorA = part_logprior_proposed-part_logprior_probs[i] + beta_logprior_proposed - beta_logprior_probs[i] + eta_logprior_proposed-eta_logprior_probs[i]
 
