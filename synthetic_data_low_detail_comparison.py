@@ -16,22 +16,22 @@ else:
     print("Synthetic datasets haven't been generated")
     quit()
 
-beta_values = [0.2,0.5,1.5]
-eta_values = [0,0.5,1]
+beta_values = [0.2,0.5,1.5,2.,2.5]
+eta_values = [0,0.5,1] 
 N_hh = 1000
 detail_values = ["l"]#,"m","h"]
 
-n_iters = int(1e6)
+n_iters = int(5e5)
 beta0 = 1.0 
 p_beta_move = 0.01
 N_datasets = 100
 
-hh_dist_str = "split"  # "UK" or "split"
-prior = True
+hh_dist_str = "UK"  # "UK" or "split"
+prior = False
 
 
-params_fn = "outputs/synthetic_data_detail_comparison_" + hh_dist_str + "_params"
-results_fn = "outputs/synthetic_data_detail_comparison_" + hh_dist_str + "_results"
+params_fn = "outputs/synthetic_data_validation_" + hh_dist_str + "_params"
+results_fn = "outputs/synthetic_data_validation_" + hh_dist_str + "_results"
 
 
 
@@ -41,7 +41,7 @@ if prior:
     if isfile("datasets/household_size_distributions.pkl"):
         with open("datasets/household_size_distributions.pkl", "rb") as f:
             household_size_distributions = load(f)
-        prior_v = [i*p for i,p in enumerate(household_size_distributions[hh_dist_str],2)]
+        prior_v = np.array([i*p for i,p in enumerate(household_size_distributions[hh_dist_str],2)])
     else:
         print("Household size distributions file not found, cannot run with prior")
         quit()
@@ -85,7 +85,8 @@ class syntethic_detail_comparison_chain():
                                         thin = 100,
                                         verbose = False,
                                         info_level = self.detail_level,
-                                        partition_prior= prior_v)
+                                        partition_prior= prior_v,
+                                        size_weighted=True)
 
 
         except:
@@ -94,13 +95,17 @@ class syntethic_detail_comparison_chain():
             print("Error details:")
             traceback.print_exc()
             results = 0
+        
+        
+        
+        
         return results
 
 
 
 def main(no_of_workers,n_chains):
-    print("Starting parameter sweep with", no_of_workers, "workers and", n_chains, "chains per synthetic dataset. Total number of chains per parameter set:", len(list(params)))
-
+    print("Starting parameter sweep with", no_of_workers, "workers and", n_chains, "chains per each of the ", N_datasets, " synthetic datasets. Total number of parameter sets:", len(list(params)))
+    print("Household distribution:", hh_dist_str, " Prior:", prior)
     dataset_chain_indices = list(product(range(N_datasets),range(n_chains)))
 
 
@@ -119,6 +124,8 @@ def main(no_of_workers,n_chains):
             
             with open(filename, "wb") as f:
                 dump(results,f)
+        else:
+            print(f"Results for parameter set: beta = {beta} eta = {eta} detail = {detail} already exist, skipping")
 
 
 

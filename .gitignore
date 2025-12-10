@@ -11,3 +11,5 @@ __pycache__/HH_case_partition_MCMC.cpython-311.pyc
 size_of_P(D).py
 .idea/*
 results_notebook.ipynb
+*.svg
+ONS_eta_prior/*

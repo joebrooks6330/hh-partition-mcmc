@@ -1,0 +1,26 @@
+﻿First Author,Number of Households,Number of household contacts,Number of household secondary cases,Maximum number of household contacts,Variant,Start Date,SAR,Mean Household size,Notes
+Baker et al.,183,431,227,5,Omicron,21/11/2021,0.526682135,2.36,
+Ng DCE et al.,185,848,466,8,B.1.524 (Malaysian Local Variant),01/02/2020,0.549528302,4.58,HH size IQR 4-7
+Ng OT et al.,301,1024,202,8,Delta,01/09/2020,0.197265625,3.4,
+Teherani et al.,32,144,67,8,Wild,16/03/2020,0.465277778,4.5,HH size IQR 4-6.7
+Hsu et al.,37,85,46,5,Not Specified,28/01/2020,0.541176471,2.3,
+Jalali et al. (Omicron),667,1299,662,6,Omicron,14/12/2021,0.509622787,1.95,
+Jalali et al. (Delta),455,870,315,6,Delta,14/12/2021,0.362068966,1.91,
+Lewis et al.,58,188,52,16,Not Specified,25/04/2020,0.276595745,3.24,
+Dub et al.,37,87,30,6,Wild,17/06/2020,0.344827586,2.35,HH IQR 2-4
+Gomaa et al.,23,98,66,14,Not Specified,Mar-17,0.673469388,4.26,
+Carazo et al.,3823,9096,2718,6,Wild,14/06/2020,0.298812665,2.38,
+Sundar et al.,18,64,28,6,Wild,20th August 2020,0.4375,3.56,Mean size 3.5 
+Hu et al.,100,267,46,5,Wild,05/03/2020,0.172284644,2.67,Mean size 2.67
+Afonso et al.,187,267,67,4,Wild,15/06/2020,0.25093633,1.43,
+Wang X et al.,38,193,76,7,Wild,01/01/2020,0.393782383,5.08,
+Verberk et al.,276,644,200,5,Not Specified,Apr-20,0.310559006,2.33,HH Size IQR 2-4
+Jashaninejad et al.,323,989,314,5,Wild,Mid-May 2020,0.317492417,3.06,Mean size 3
+Remón Berrade et al.,89,326,46,7,Wild,02/03/2020,0.141104294,3.66,
+Luo et al.,244,1015,105,10,Wild,13/01/2020,0.103448276,4.16,
+Tanaka et al. (Wild),139,290,56,5,Wild,01/12/2020,0.193103448,2.09,Mean 2
+Tanaka et al. (Alpha),168,398,138,5,Alpha,20/04/2021,0.346733668,2.37,Mean 2.4
+Gorgels et al.,97,249,99,5,Alpha,06/03/2021,0.397590361,2.57,
+Watanapokasin et al.,30,157,76,16,"Alpha,Delta,Unknown",01/05/2021,0.484076433,5.23,
+Park SY et al.,98,225,34,5,Wild,21-Feb-20,0.151111111,2.3,Mean 2.3
+Ogata et al.,236,496,125,6,Wild,01/08/2020*,0.252016129,2.1,Mean 2
