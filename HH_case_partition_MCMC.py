@@ -654,7 +654,7 @@ def RunPartitionsMCMC(C0: np.ndarray,
     
     if (partition_prior == np.zeros(1)).all():
         #Check if partition_prior is provided, if not set to uniform prior
-        partition_prior_p = np.ones(m)/m
+        partition_prior = np.ones(m)/m
         size_weighted = True
     else:
         if not size_weighted:
@@ -779,7 +779,7 @@ def RunPartitionsMCMC(C0: np.ndarray,
 
         proposalA = log_reverse_proposal_prob-log_proposal_prob
 
-        part_logprior_proposed = PartitionPriorProbability(C_proposed,partition_prior_p,dot_for_contacts,m)
+        part_logprior_proposed = PartitionPriorProbability(C_proposed,partition_prior,dot_for_contacts,m,size_weighted)
 
         priorA = part_logprior_proposed-part_logprior_probs[i] + beta_logprior_proposed - beta_logprior_probs[i] + eta_logprior_proposed-eta_logprior_probs[i]
 
