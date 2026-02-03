@@ -455,7 +455,8 @@ def LogFactorials(N):
 
 def FinalSizeDistributions(m: int,
                            beta: float,
-                           eta: float =1.0):
+                           eta: float =1.0,
+                           phi = lambda t: np.exp(-t)):
     """
     Returns a list of final size distributitons for each of the household sizes from 1 to m. Assumes frequency based mixing and constant infectious period.
     
@@ -470,7 +471,7 @@ def FinalSizeDistributions(m: int,
     fs : list
         List of final size distributions for each household size from 1 to m
     """
-    phi = lambda t: np.exp(-t) # Constant infectious period
+    
     fs = [final_size_distribution_homogeneous_no_intro(n, 1, beta/(n**eta), phi) for n in range(1,m+1)]
     return fs
 
@@ -593,7 +594,8 @@ def RunPartitionsMCMC(C0: np.ndarray,
     size_weighted: bool = False,
     beta_logprior = lambda b: 0 if (b>0 and b<10) else -np.inf,
     eta_logprior = lambda e: 0 if (e>=0 and e<=1) else -np.inf,
-    info_level: str = "l"
+    info_level: str = "l",
+    phi = lambda t: np.exp(-t)
     ):
     """
     Given a number of primary cases, secondary contacts and cases (encoded in C0), this function runs an MCMC to fit a transmission rate.
@@ -696,7 +698,7 @@ def RunPartitionsMCMC(C0: np.ndarray,
         
     #Initialise array to store likelihoods
     likelihoods = np.zeros(n_iters+1)
-    final_size_distributions = FinalSizeDistributions(m,beta0,eta0)
+    final_size_distributions = FinalSizeDistributions(m,beta0,eta0,phi)
     final_size_distributions_proposed = final_size_distributions
     likelihoods[0] = PartitionLogLikelihood(C0, beta0, m,final_size_distributions,LF)
 
