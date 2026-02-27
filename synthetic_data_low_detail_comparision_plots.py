@@ -11,7 +11,6 @@ from partition_functions import FlatPartition, get_simple_dataset
 plt.style.use("ggplot")
 plt.rcParams["font.family"] = "monospace"
 
-
 #Import household size distributions used to generate synthetic data
 if isfile("datasets/household_size_distributions.pkl"):
     with open("datasets/household_size_distributions.pkl","rb") as f:
@@ -47,10 +46,12 @@ if isfile("datasets/synthetic_100.pkl"):
 
 
 hh_dist_strings = hh_size_dist_dict.keys()
-hh_dist_prior_tuples = [(hh_dist,prior) for hh_dist in hh_dist_strings for prior in [False,True]]
-hh_dist_prior_tuples.remove(("UK",True)) # No prior for UK distribution
+hh_dist_prior_tuples = [(hh_dist,S) for hh_dist in hh_dist_strings for S in [100,1000]]
+I_dist_assumption_dict = {"Fixed": lambda t: np.exp(-t),
+                          "Markov": lambda t: 1/(1+t),
+                          "Gamma2": lambda t: (1+(t/2))**(-2)}
 
-beta_values = [0.2,0.5,1.5,2.,2.5]
+beta_values = [0.2,0.5,1.5,2.]
 eta_values = [0,0.5,1]
 detail_values = ["l"]
 N_datasets = 100
@@ -58,54 +59,51 @@ N_datasets = 100
       
                 
 
-results_C0 = {tp: {beta:{eta:{detail: np.zeros((N_datasets)) for detail in detail_values} for eta in eta_values} for beta in beta_values} for tp in hh_dist_prior_tuples}
-results_SAR = {tp: {beta:{eta:{detail: np.zeros(N_datasets) for detail in detail_values} for eta in eta_values} for beta in beta_values} for tp in hh_dist_prior_tuples}
-results_beta = {tp: {beta:{eta:{detail: np.zeros(N_datasets) for detail in detail_values} for eta in eta_values} for beta in beta_values} for tp in hh_dist_prior_tuples}
-results_llh = {tp: {beta:{eta:{detail: np.zeros(N_datasets) for detail in detail_values} for eta in eta_values} for beta in beta_values} for tp in hh_dist_prior_tuples}
-results_beta_mean = {tp: {beta:{eta:{detail: np.zeros(N_datasets) for detail in detail_values} for eta in eta_values} for beta in beta_values} for tp in hh_dist_prior_tuples}
-results_beta_CI = {tp: {beta:{eta:{detail: np.zeros((N_datasets,2)) for detail in detail_values} for eta in eta_values} for beta in beta_values} for tp in hh_dist_prior_tuples}
-params = list(product(hh_dist_prior_tuples,beta_values,eta_values,detail_values))
+results_C0 = {tp: {I_dist:{beta:{eta:{detail: np.zeros((N_datasets)) for detail in detail_values} for eta in eta_values} for beta in beta_values} for I_dist in I_dist_assumption_dict.keys()} for tp in hh_dist_prior_tuples}
+results_SAR = {tp: {I_dist:{beta:{eta:{detail: np.zeros(N_datasets) for detail in detail_values} for eta in eta_values} for beta in beta_values} for I_dist in I_dist_assumption_dict.keys()} for tp in hh_dist_prior_tuples}
+results_beta = {tp:{I_dist: {beta:{eta:{detail: np.zeros(N_datasets) for detail in detail_values} for eta in eta_values} for beta in beta_values} for I_dist in I_dist_assumption_dict.keys()} for tp in hh_dist_prior_tuples}
+results_llh = {tp:{I_dist: {beta:{eta:{detail: np.zeros(N_datasets) for detail in detail_values} for eta in eta_values} for beta in beta_values} for I_dist in I_dist_assumption_dict.keys()} for tp in hh_dist_prior_tuples}
+results_beta_mean = {tp:{I_dist: {beta:{eta:{detail: np.zeros(N_datasets) for detail in detail_values} for eta in eta_values} for beta in beta_values} for I_dist in I_dist_assumption_dict.keys()} for tp in hh_dist_prior_tuples}
+results_beta_CI = {tp:{I_dist: {beta:{eta:{detail: np.zeros((N_datasets,2)) for detail in detail_values} for eta in eta_values} for beta in beta_values} for I_dist in I_dist_assumption_dict.keys()} for tp in hh_dist_prior_tuples}
+params = list(product(hh_dist_prior_tuples,I_dist_assumption_dict.keys(),beta_values,eta_values,detail_values))
 
 c=0
 for p1 in tqdm(params,desc = "Loading results"):
     tp = p1[0]
     hh_dist = p1[0][0]
-    prior = p1[0][1]
-    beta = p1[1]
-    eta = p1[2]
-    detail = p1[3]
-
-    filename = f"outputs/synthetic_data_validation_{hh_dist}_results"
-    if prior:
-        filename += "_prior"
-    
+    S = p1[0][1]
+    I_dist = p1[1]
+    beta = p1[2]
+    eta = p1[3]
+    detail = p1[4]
+    filename = f"outputs/synthetic_data_validation_{hh_dist}_S={S}_I_dist={I_dist}_results"
     filename += f"_beta={beta}_eta={eta}_detail={detail}.pkl"
 
     if isfile(filename):
         c+=1
-        datasets = synthetic_datasets[beta][eta][1000][hh_dist]
+        datasets = synthetic_datasets[I_dist][beta][eta][1000][hh_dist]
         with open(filename, "rb") as f:
             results = load(f)
         m = IndexChange1dTo2d(len(datasets[0])-1)[0]
         dot_for_contacts = np.concatenate([np.zeros(n+1)+n for n in range(1,m+1)])
         dot_for_cases = np.concatenate([np.arange(0, n + 1) for n in range(1, m + 1)])
 
-        results_C0[tp][beta][eta][detail] = array([r[0][0] for r in results])
+        results_C0[tp][I_dist][beta][eta][detail] = array([r[0][0] for r in results])
         simple_datasets = [get_simple_dataset(C_data,m) for C_data in datasets]
         F_datasets = [FlatPartition(n,y,N,m) for (N,y,n) in simple_datasets]
         
         
-        for i in range(10):
-            print(f"Debugging beta={beta}, eta={eta}, detail={detail}, hh_dist={hh_dist}, prior={prior}")
-            print(datasets[i])
-            print(np.array(F_datasets[i]))
-            print(np.array(results_C0[tp][beta][eta][detail][i]))
+        # for i in range(10):
+        #     print(f"Debugging beta={beta}, eta={eta}, detail={detail}, hh_dist={hh_dist}, prior={prior}")
+        #     print(datasets[i])
+        #     print(np.array(F_datasets[i]))
+        #     print(np.array(results_C0[tp][beta][eta][detail][i]))
         n_iters = len(results[0][0])
-        results_SAR[tp][beta][eta][detail] = array([C.dot(dot_for_cases)/C.dot(dot_for_contacts) for C in datasets])
-        results_llh[tp][beta][eta][detail] = array([r[1] for r in results])
-        results_beta[tp][beta][eta][detail] = array([r[2][n_iters//5:] for r in results])
-        results_beta_mean[tp][beta][eta][detail] = array([np.mean(r) for r in results_beta[tp][beta][eta][detail]]) #type:ignore
-        results_beta_CI[tp][beta][eta][detail]= array([np.percentile(r, [2.5,97.5]) for r in results_beta[tp][beta][eta][detail]]) #type:ignore
+        results_SAR[tp][I_dist][beta][eta][detail] = array([C.dot(dot_for_cases)/C.dot(dot_for_contacts) for C in datasets])
+        results_llh[tp][I_dist][beta][eta][detail] = array([r[1] for r in results])
+        results_beta[tp][I_dist][beta][eta][detail] = array([r[2][n_iters//10:] for r in results])
+        results_beta_mean[tp][I_dist][beta][eta][detail] = array([np.mean(r) for r in results_beta[tp][I_dist][beta][eta][detail]]) #type:ignore
+        results_beta_CI[tp][I_dist][beta][eta][detail]= array([np.percentile(r, [2.5,97.5]) for r in results_beta[tp][I_dist][beta][eta][detail]]) #type:ignore
     else:
         print(f"File {filename} not found.")
 
@@ -125,14 +123,16 @@ n_rows = len(eta_values)
 n_cols = len(beta_values)
 detail = "l"
 
-labels = ["UK LFS (2023)", "Split", "Split (prior)"]
-x_tick_deltas = [0.04,0.1,0.3,0.3,0.3]
-x_gaps = [0.2,0.5,1.5,1.5,1.5]
+I_dist = "Gamma2" 
+
+labels = ["UK LFS " +  r"$(S=1e2)$","UK LFS " + r"$(S=1e3)$", "Split " + r"$(S=1e2)$", "Split " + r"$(S=1e3)$"]
+x_tick_deltas = [0.04,0.1,0.3,0.3,0.4]
+x_gaps = [0.2,0.5,1.5,1.5,2]
 round_is = [2,1,1,1,1]
 
-plot_labels = [["A","B","C","D","E"],
-               ["F","G","H","I","J"],
-               ["K","L","M","N","O"]]
+plot_labels = [["A","B","C","D"],
+               ["F","G","H","I"],
+               ["K","L","M","N"]]
 
 fig,axes = plt.subplots(n_rows,n_cols, figsize = (20,10), sharey=True,sharex = "col")
 
@@ -147,27 +147,27 @@ for i,eta in enumerate(eta_values):
         ax.text(0.01, 0.93, plot_labels[i][j], fontsize=20, transform=ax.transAxes, ha='left', va='top')
 
         ax.set_ylim(-10,120)
-        ax.set_xlim(beta-0.5*x_gaps[j], beta + 2.5*x_gaps[j])
+        ax.set_xlim(beta-0.5*x_gaps[j], beta + 3.5*x_gaps[j])
 
-        ax.vlines([beta,beta+x_gaps[j],beta+2*x_gaps[j]],-5,105,color = "black",linestyle = "--")
+        ax.vlines([beta,beta+x_gaps[j],beta+2*x_gaps[j],beta+3*x_gaps[j]],-5,105,color = "black",linestyle = "--")
 
-        ax.vlines([beta+(k+0.5)*x_gaps[j] for k in range(-1,3)],-100,1000,color = "black")
+        ax.vlines([beta+(k+0.5)*x_gaps[j] for k in range(-1,4)],-100,1000,color = "black")
 
         ax.set_yticks([])
 
         x_tick_delta = x_tick_deltas[j]
-        ax.set_xticks(np.concat([[beta+k*x_gaps[j]+l*x_tick_delta for l in range(-2,3,1)] for k in range(0,3)]))
-        ax.set_xticklabels([round(beta+ k * x_tick_delta,round_i) for k in range(-2,3,1) ]*3,fontsize=12, rotation=90)
+        ax.set_xticks(np.concat([[beta+k*x_gaps[j]+l*x_tick_delta for l in range(-2,3,1)] for k in range(0,4)]))
+        ax.set_xticklabels([round(beta+ k * x_tick_delta,round_i) for k in range(-2,3,1) ]*4,fontsize=12, rotation=90)
 
         for k,tp in enumerate(hh_dist_prior_tuples):
-            if not tp[1]:
-                print(f"{tp}, beta={beta}, eta={eta}, SAR = {round(100*np.mean(results_SAR[tp][beta][eta][detail]),1)}({np.round(100*np.percentile(results_SAR[tp][beta][eta][detail],2.5),1)},{np.round(100*np.percentile(results_SAR[tp][beta][eta][detail],97.5),1)})%")
+            if not k in [0,2]:
+                print(f"{tp}, beta={beta}, eta={eta}, SAR = {round(100*np.mean(results_SAR[tp][I_dist][beta][eta][detail]),1)}({np.round(100*np.percentile(results_SAR[tp][I_dist][beta][eta][detail],2.5),1)},{np.round(100*np.percentile(results_SAR[tp][I_dist][beta][eta][detail],97.5),1)})%")
             
-            CI = results_beta_CI[tp][beta][eta][detail]
-            means = results_beta_mean[tp][beta][eta][detail]
+            CI = results_beta_CI[tp][I_dist][beta][eta][detail]
+            means = results_beta_mean[tp][I_dist][beta][eta][detail]
             check = [beta<CI[i][0] or beta>CI[i][1] for i in range(len(CI))]
             error_rate = sum(check)/100
-            ax.text(beta+(k)*x_gaps[j],116,labels[k] ,ha='center', va='center')
+            ax.text(beta+(k)*x_gaps[j],116,labels[k] ,ha='center', va='center',fontsize=8)
             ax.text(beta+(k)*x_gaps[j],109,f" ({round(100*(1-error_rate))}%)",ha='center', va='center',color = (0.75*error_rate,0.75*(1-error_rate),0))
             
             ax.scatter(k*x_gaps[j] + means,np.arange(0,100,1), s=[2 if check[i] else 1 for i in range(len(CI))],
@@ -189,4 +189,4 @@ for i,eta in enumerate(eta_values):
                         linewidth=[0.75 if check[i] else 0.5 for i in range(len(CI))])
 
 plt.tight_layout()
-plt.savefig("figures/synthetic_dataset_low_information_comparison.png",dpi = 400)
+plt.savefig("figures/synthetic_dataset_low_information.png",dpi = 400)

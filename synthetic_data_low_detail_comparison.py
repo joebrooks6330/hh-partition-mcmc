@@ -16,42 +16,43 @@ else:
     print("Synthetic datasets haven't been generated")
     quit()
 
-beta_values = [0.2,0.5,1.5,2.,2.5]
+beta_values = [0.2,0.5,1.5,2.]
 eta_values = [0,0.5,1] 
 N_hh = 1000
 detail_values = ["l"]#,"m","h"]
+I_dist_assumption_dict = {"Fixed": lambda t: np.exp(-t),
+                          "Markov": lambda t: 1/(1+t),
+                          "Gamma2": lambda t: (1+(t/2))**(-2)}
+I_Dist_str = "Gamma2"
 
-n_iters = int(5e5)
+n_iters = int(1e6)
 beta0 = 1.0 
 p_beta_move = 0.01
 N_datasets = 100
 
 hh_dist_str = "UK"  # "UK" or "split"
-prior = False
+C_example = synthetic_datasets[I_Dist_str][beta_values[0]][eta_values[0]][N_hh][hh_dist_str][0]
+m = IndexChange1dTo2d(len(C_example)-1)[0]
+S = 1000 #Scaling variable for Dirichlet parameters. 100 or 1000
 
 
-params_fn = "outputs/synthetic_data_validation_" + hh_dist_str + "_params"
-results_fn = "outputs/synthetic_data_validation_" + hh_dist_str + "_results"
+params_fn = f"outputs/synthetic_data_validation_{hh_dist_str}_S={S}_I_dist={I_Dist_str}_params"
+results_fn = f"outputs/synthetic_data_validation_{hh_dist_str}_S={S}_I_dist={I_Dist_str}_results"
 
 
-
-if prior:
-    params_fn += "_prior"
-    results_fn += "_prior"
-    if isfile("datasets/household_size_distributions.pkl"):
-        with open("datasets/household_size_distributions.pkl", "rb") as f:
-            household_size_distributions = load(f)
-        prior_v = np.array([i*p for i,p in enumerate(household_size_distributions[hh_dist_str],2)])
-    else:
-        print("Household size distributions file not found, cannot run with prior")
-        quit()
+if isfile("datasets/household_size_distributions.pkl"):
+    with open("datasets/household_size_distributions.pkl", "rb") as f:
+        household_size_distributions = load(f)
+    alpha = np.array([i*p for i,p in enumerate(household_size_distributions[hh_dist_str],2)])
+    alpha = S*alpha/sum(alpha)
 else:
-    prior_v = np.zeros(1)
+    print("Household size distributions file not found, cannot run with prior")
+    quit()
+
 
 params = list(product(beta_values,eta_values,detail_values))
 
 
-#needs_adapting from here:
 
 class syntethic_detail_comparison_chain():
      def __init__(self,p1):
@@ -65,7 +66,7 @@ class syntethic_detail_comparison_chain():
         chain_i = p2[1]
         
         try:
-            C_data = synthetic_datasets[self.beta][self.eta][N_hh][hh_dist_str][dataset_i]
+            C_data = synthetic_datasets[I_Dist_str][self.beta][self.eta][N_hh][hh_dist_str][dataset_i]
             m = IndexChange1dTo2d(len(C_data)-1)[0]
             if self.detail_level == "l":
                 N,y,n = get_simple_dataset(C_data,m)
@@ -81,12 +82,12 @@ class syntethic_detail_comparison_chain():
                                         n_iters,
                                         0.1,
                                         0,
+                                        alpha = alpha,
                                         p_beta_move = p_beta_move,
                                         thin = 100,
                                         verbose = False,
                                         info_level = self.detail_level,
-                                        partition_prior= prior_v,
-                                        size_weighted=True)
+                                        phi = I_dist_assumption_dict[I_Dist_str])
 
 
         except:
@@ -105,7 +106,7 @@ class syntethic_detail_comparison_chain():
 
 def main(no_of_workers,n_chains):
     print("Starting parameter sweep with", no_of_workers, "workers and", n_chains, "chains per each of the ", N_datasets, " synthetic datasets. Total number of parameter sets:", len(list(params)))
-    print("Household distribution:", hh_dist_str, " Prior:", prior)
+    print("Household distribution:", hh_dist_str, " alpha:", alpha, " I distribution:", I_Dist_str)
     dataset_chain_indices = list(product(range(N_datasets),range(n_chains)))
 
 
@@ -116,6 +117,7 @@ def main(no_of_workers,n_chains):
         detail = p1[2]
 
         filename = results_fn + f"_beta={beta}_eta={eta}_detail={detail}.pkl"
+
         if not isfile(filename):
             print(f"Running parameter set: beta = {beta} eta = {eta} detail = {detail}")
 
