@@ -1,29 +1,29 @@
-﻿First Author,Number of Households,Number of household contacts,Number of household secondary cases,Maximum number of household contacts,Variant,Start Date,SAR,Mean Household size,Notes
-Baker et al.,183,431,227,5,Omicron,21/11/2021,0.526682135,2.355191257,
-Ng DCE et al.,185,848,466,8,B.1.524 (Malaysian Local Variant),01/02/2020,0.549528302,4.583783784,HH size IQR 4-7
-Ng OT et al. (Other),73,248,33,8,Not Specified,01/09/2020,0.133064516,3.397260274,
-Ng OT et al. (Delta),228,753,169,8,Delta,01/09/2020,0.224435591,3.302631579,
-Teherani et al.,32,144,67,8,Wild,16/03/2020,0.465277778,4.5,HH size IQR 4-6.7
-Hsu et al.,37,85,46,5,Not Specified,28/01/2020,0.541176471,2.297297297,
-Jalali et al. (Omicron),667,1299,662,6,Omicron,14/12/2021,0.509622787,1.947526237,
-Jalali et al. (Delta),455,870,315,6,Delta,14/12/2021,0.362068966,1.912087912,
-Lewis et al.,58,188,52,16,Not Specified,25/04/2020,0.276595745,3.24137931,
-Dub et al.,37,87,30,6,Wild,17/06/2020,0.344827586,2.351351351,HH IQR 2-4
-Gomaa et al.,23,98,66,14,Not Specified,Mar-17,0.673469388,4.260869565,
-Carazo et al.,3823,9096,2718,6,Wild,14/06/2020,0.298812665,2.379283285,
-Sundar et al.,18,64,28,6,Wild,20th August 2020,0.4375,3.555555556,Mean size 3.5 
-Hu et al.,100,267,46,5,Wild,05/03/2020,0.172284644,2.67,Mean size 2.67
-Afonso et al.,187,267,67,4,Wild,15/06/2020,0.25093633,1.427807487,
-Wang X et al.,38,193,76,7,Wild,01/01/2020,0.393782383,5.078947368,
-Verberk et al.,276,644,200,5,Not Specified,Apr-20,0.310559006,2.333333333,HH Size IQR 2-4
-Jashaninejad et al.,323,989,314,5,Wild,Mid-May 2020,0.317492417,3.061919505,Mean size 3
-Remón Berrade et al.,89,326,46,7,Wild,02/03/2020,0.141104294,3.662921348,
-Luo et al.,244,1015,105,10,Wild,13/01/2020,0.103448276,4.159836066,
-Tanaka et al. (Wild),139,290,56,5,Wild,01/12/2020,0.193103448,2.086330935,Mean 2
-Tanaka et al. (Alpha),54,124,48,5,Alpha,20/04/2021,0.387096774,2.296296296,Mean 2.4
-Gorgels et al.,97,249,99,5,Alpha,06/03/2021,0.397590361,2.567010309,
-Watanapokasin et al. (Alpha),7,35,17,16,Alpha,01/05/2021,0.485714286,5,
-Watanapokasin et al. (Delta),7,43,15,16,Delta,01/05/2021,0.348837209,6.142857143,
-Watanapokasin et al. (Unknown),14,79,44,16,Unknown,01/05/2021,0.556962025,5.642857143,
-Park SY et al.,98,225,34,5,Wild,21-Feb-20,0.151111111,2.295918367,Mean 2.3
-Ogata et al.,236,496,125,6,Wild,01/08/2020*,0.252016129,2.101694915,Mean 2
+﻿First Author,Number of Households,Number of household contacts,Number of household secondary cases,Maximum number of household contacts,Variant,Start Date,SAR,Mean Household size,Location,alpha,alpha source link,Notes
+Baker et al.,183,431,227,5,Omicron,21/11/2021,0.526682135,2.355191257,"USA (Chicago, Illinois; Connecticut; Milwaukee, Wisconsin; and Utah)","29.08,34.59,15.06,12.44,5.57,2.06,1.19",https://www.statista.com/statistics/242189/disitribution-of-households-in-the-us-by-household-size/,
+Ng DCE et al.,185,848,466,8,B.1.524 (Malaysian Local Variant),01/02/2020,0.549528302,4.583783784,"Negeri Sembilan, Malaysia","7.1,12.8,12.8,18.95,18.95,9.8,9.8,9.8",https://population.un.org/household/#/countries/840,"HH size IQR 4-7, alpha source is from 2000 and grouped but can't find anything more detailed/recent from Malaysia. Assumed that grouped household sizes are equally likely."
+Ng OT et al. (Other),73,248,33,8,Not Specified,01/09/2020,0.133064516,3.397260274,Singapore,"220300, 309800, 280500, 275600, 163500, 122900, 40967, 40967, 40966",https://www.singstat.gov.sg/publications/reference/ebook/households/households,Household size counts only up to size 6+ so assume an even split for 6-8
+Ng OT et al. (Delta),228,753,169,8,Delta,01/09/2020,0.224435591,3.302631579,Singapore,"220300, 309800, 280500, 275600, 163500, 122900, 40967, 40967, 40966",https://www.singstat.gov.sg/publications/reference/ebook/households/households,Household size counts only up to size 6+ so assume an even split for 6-8
+Teherani et al.,32,144,67,8,Wild,16/03/2020,0.465277778,4.5,"Atlanta, Georgia, USA","29.08,34.59,15.06,12.44,5.57,2.06,1.19",https://www.statista.com/statistics/242189/disitribution-of-households-in-the-us-by-household-size/,HH size IQR 4-6.7
+Hsu et al.,37,85,46,5,Not Specified,28/01/2020,0.541176471,2.297297297,Taiwan,"14.37,30.98,23.06,19.13,7.28,3.44,1.18,0.34,0.21","TNational Statistics, R.O.C.(Taiwan) Macro Database  ""Percent Distribution by Size of Household"". from https://nstatdb.dgbas.gov.tw/dgbasall/webMain.aspx?k=engmain",
+Jalali et al. (Omicron),667,1299,662,5,Omicron,14/12/2021,0.509622787,1.947526237,Norway,"19.1,29.3,17.0,21.5,13.1",https://www.ssb.no/en/statbank/table/06079,
+Jalali et al. (Delta),455,870,315,5,Delta,14/12/2021,0.362068966,1.912087912,Norway,"19.1,29.3,17.0,21.5,13.1",https://www.ssb.no/en/statbank/table/06079,
+Lewis et al.,58,188,52,16,Not Specified,25/04/2020,0.276595745,3.24137931,USA,"29.08,34.59,15.06,12.44,5.57,2.06,1.19",https://www.statista.com/statistics/242189/disitribution-of-households-in-the-us-by-household-size/,
+Dub et al.,37,87,30,6,Wild,17/06/2020,0.344827586,2.351351351,"Helsinki, Finland","98605, 30689,23639,6224,1437,411,155",https://pxdata.stat.fi/PxWeb/pxweb/en/StatFin/StatFin__ktutk/statfin_ktutk_pxt_14qb.px/,"HH IQR 2-4, alpha from 2020, Helsinki families"
+Gomaa et al.,23,98,66,14,Not Specified,Mar-17,0.673469388,4.260869565,Rural Egypt,"7.3, 13.0, 14.4, 22.1, 22.6, 12.7, 4.9, 1.9, 1.0",https://censusinfo.capmas.gov.eg/metadata-en-v4.2/index.php/catalog/665,"EFHS 2021 Table 1, rural"
+Carazo et al.,3823,9096,2718,6,Wild,14/06/2020,0.298812665,2.379283285,"Quebec, Canada","138280, 44770,41545,11703,5851","https://www12.statcan.gc.ca/census-recensement/2021/dp-pd/prof/details/page.cfm?Lang=E&SearchText=Quebec&DGUIDlist=2021S0503421&GENDERlist=1,2,3&STATISTIClist=1&HEADERlist=0",Assumed 5+ person hh are split 2/3 5 person and 1/3 6 person
+Sundar et al.,18,64,28,6,Wild,20th August 2020,0.4375,3.555555556,"Chennai, Tamil Nadu, India","35521,142015,242394,390909,185424,79717, 15313.75, 15313.75, 15313.75, 15313.75, 995.25, 995.25, 995.25, 995.25, 905",https://censusindia.gov.in/census.website/data/census-tables,"Mean size 3.5, India 2011 Census, Table HH-01, Tamil Nadu, Chennai, Total. Assume that grouped sizes are split equally"
+Hu et al.,100,267,46,5,Wild,05/03/2020,0.172284644,2.67,"Guangzhou, Guangdong, China","8163, 6699, 4263, 3757, 2294, 1375, 654, 301, 130, 189",https://www.stats.gov.cn/sj/ndsj/2020/indexeh.htm,"Mean size 2.67, 2-16 Family households by size and region (Guangdong)"
+Afonso et al.,187,267,67,4,Wild,15/06/2020,0.25093633,1.427807487,"Goiana, Goias, Brazil","187371, 268566, 218375, 159740, 56720, 26246",https://censo2022.ibge.gov.br/panorama/indicadores.html?localidade=N33[5208707]&tema=6,"Table for Goiana , Census 2022"
+Wang X et al.,38,193,76,7,Wild,01/01/2020,0.393782383,5.078947368,"Beijing, China","1352, 1849, 1648, 673, 397, 125, 18, 8, 2,1 ",https://www.stats.gov.cn/sj/ndsj/2020/indexeh.htm,2-16 Family households by size and region (Beijin)
+Verberk et al.,276,644,200,5,Not Specified,Apr-20,0.310559006,2.333333333,"Belgium, Switzerland and The Netherlands","0,84, 54,77,55 ",Table one of this paper,HH Size IQR 2-4
+Jashaninejad et al.,323,989,314,5,Wild,Mid-May 2020,0.317492417,3.061919505,"Hamadan, Iran","8.5, 20.7, 28.5, 27.6, 14.7",https://irandataportal.syr.edu/?page_id=9539&preview=true,"Mean size 3, Key Findings Presentation"
+Remón Berrade et al.,89,326,46,7,Wild,02/03/2020,0.141104294,3.662921348,"Pamplona, Spain","5001166, 5203749, 3837982, 1498775, 1199020, 899265, 599510, 299755",https://www.ine.es/jaxiT3/Tabla.htm?t=60135,"alpha taken from January 1st 2021. Only goes up to 4 people so extend to maximum of 8 by assuming the 4+ category is split between 4,5,6,7 and 8 people in ratios 5/15,4/15,3/15,2/15,1/15"
+Luo et al.,244,1015,105,10,Wild,13/01/2020,0.103448276,4.159836066,"Guangzhou, Guangdong, China","8163, 6699, 4263, 3757, 2294, 1375, 654, 301, 130, 189",https://www.stats.gov.cn/sj/ndsj/2020/indexeh.htm,2-16 Family households by size and region (Guangdong)
+Tanaka et al. (Wild),139,290,56,5,Wild,01/12/2020,0.193103448,2.086330935,"Osaka, Japan","1727107, 1121971, 638834, 470392, 133140, 27132, 6248, 1529, 426, 216",https://www.e-stat.go.jp/en/stat-search/files?page=1&layout=datalist&toukei=00200521&tstat=000001136464&cycle=0&year=20200&month=24101210&tclass1=000001136466,"Mean 2, Table 6-3, Osaka"
+Tanaka et al. (Alpha),54,124,48,5,Alpha,20/04/2021,0.387096774,2.296296296,"Osaka, Japan","1727107, 1121971, 638834, 470392, 133140, 27132, 6248, 1529, 426, 216",https://www.e-stat.go.jp/en/stat-search/files?page=1&layout=datalist&toukei=00200521&tstat=000001136464&cycle=0&year=20200&month=24101210&tclass1=000001136466," Table 6-3, Osaka"
+Gorgels et al.,97,249,99,4,Alpha,06/03/2021,0.397590361,2.567010309,The Netherlands,"3097117, 2640717, 940588, 958249, 406772",https://www.cbs.nl/en-gb/figures/detail/82905ENG?q=households;%20size,alpha taken from 2021
+Watanapokasin et al. (Alpha),7,35,17,16,Alpha,01/05/2021,0.485714286,5,"Bangkok, Thailand","1, 1, 1, 1, 1, 1, 1, 1, 1, 1 ,1 ,1, 1, 1 ,1, 1, 1 ",https://catalogapi.nso.go.th/api/doc/MICS_31_2.pdf,"UN source for the whole of Thailand. Based on the mean size in this study, not representative of Thailand at all so we will do a flat prior "
+Watanapokasin et al. (Delta),7,43,15,16,Delta,01/05/2021,0.348837209,6.142857143,"Bangkok, Thailand","1, 1, 1, 1, 1, 1, 1, 1, 1, 1 ,1 ,1, 1, 1 ,1, 1, 1 ",https://catalogapi.nso.go.th/api/doc/MICS_31_2.pdf,"UN source for the whole of Thailand. Based on the mean size in this study, not representative of Thailand at all so we will do a flat prior "
+Watanapokasin et al. (Unknown),14,79,44,16,Unknown,01/05/2021,0.556962025,5.642857143,"Bangkok, Thailand","1, 1, 1, 1, 1, 1, 1, 1, 1, 1 ,1 ,1, 1, 1 ,1, 1, 1 ",https://catalogapi.nso.go.th/api/doc/MICS_31_2.pdf,"UN source for the whole of Thailand. Based on the mean size in this study, not representative of Thailand at all so we will do a flat prior "
+Park SY et al.,98,225,34,5,Wild,21-Feb-20,0.151111111,2.295918367,"Seoul, South Korea","31.7, 28.0, 19.2, 13.8, 3.1, 0.7",https://www.index.go.kr/unify/idx-info.do?idxCd=4229,"Mean 2.3, alpha taken from 2020 data"
+Ogata et al.,236,496,125,6,Wild,01/08/2020*,0.252016129,2.101694915,"Tsuchiura, Ibaraki, Japan","24159, 17877, 10366, 7110, 2410, 744, 225, 54, 12, 4",https://www.e-stat.go.jp/en/stat-search/files?page=1&layout=datalist&toukei=00200521&tstat=000001136464&cycle=0&year=20200&month=24101210&tclass1=000001136466,"Mean 2, Table 6-3, Tsuchiura"
