@@ -6,8 +6,10 @@ from scipy.linalg import solve
 from numpy.linalg import cond
 from tqdm import tqdm
 from scipy.stats import norm, multinomial
+from scipy.special import gammaln
+from typing import Callable
 
-
+np.seterr(all='raise')
 
 
 #%% Index change functions
@@ -67,40 +69,6 @@ def IndexChange1dTo2d(k):
         
     return(int(i),int(k-0.5*(i-1)*(i+2)))
 
-#%% Partition ID conversion functions
-ascii_ords = np.concatenate([np.arange(48,58),np.arange(65,91),np.arange(97,123)])
-def convert_to_ascii_ords(i):
-    if i<10:
-        return 48+i
-    elif 10<=i<36:
-        return 65+i-10
-    elif 36<=i<=61:
-        return 97+i-36
-    else:
-        return 62**3
-
-def partition_to_ID(C):
-    ID  = ""
-    for c_fl in C:
-        c = int(c_fl)
-        if c<= 61:
-            ID = ID +  "00" + chr(convert_to_ascii_ords(c))
-        elif c<= 62*62 - 1:
-            ID += "0" + chr(convert_to_ascii_ords(c//62)) + chr(convert_to_ascii_ords(c%62))
-        elif c<=62**3 - 1:
-            ID += chr(convert_to_ascii_ords(c//(62*62))) + chr(convert_to_ascii_ords((c//62)%62)) + chr(convert_to_ascii_ords(c%62))
-        else:
-            raise ValueError("Partition ID is too long. Maximum length is 3 characters per element.")
-    return ID
-
-convert_from_ascii_ords = {ord(c):i for i,c in enumerate("0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz")}
-
-def ID_to_partition(ID):
-    C = np.zeros(len(ID)//3)
-    for i in range(len(ID)//3):
-        c = ID[i*3:i*3+3]
-        C[i] = convert_from_ascii_ords[ord(c[0])]*62**2+ convert_from_ascii_ords[ord(c[1])]*62 +convert_from_ascii_ords[ord(c[2])]
-    return C
 
 
 #%% Functions for selecting indices of contacts to be moved
@@ -227,7 +195,7 @@ def MoveContactLowInfo(C,k1,k2,infected,LU_1D_to_2D,LU_2D_to_1D):
 
     Parameters
     ----------
-    C : np.ndarray length max_k
+    C : np.ndarray length max_k+1
         Partition of contacts and cases
     k1 : int
         1D index of the type of household from which an individual will be removed
@@ -238,7 +206,7 @@ def MoveContactLowInfo(C,k1,k2,infected,LU_1D_to_2D,LU_2D_to_1D):
 
     Returns
     -------
-    C_new : np.ndarray length max_k
+    C_new : np.ndarray length max_k+1
         New partition following the moving of an individual
 
     """
@@ -265,7 +233,7 @@ def MoveContactMediumInfo(C,k1,k2):
 
     Parameters
     ----------
-    C : np.ndarray length max_k
+    C : np.ndarray length max_k+1
         Partition of contacts and cases
     k1 : int
         1D index of the type of household from which an individual will be removed
@@ -276,7 +244,7 @@ def MoveContactMediumInfo(C,k1,k2):
 
     Returns
     -------
-    C_new : np.ndarray length max_k
+    C_new : np.ndarray length max_k+1
         New partition following the moving of an individual
 
     """
@@ -299,7 +267,7 @@ def ReverseProposalProbabilityLowInfo(C_proposed,k1,k2,infected,m,LU_1D_to_2D,LU
 
     Parameters
     ----------
-    C_proposed : np.ndarray length max_k
+    C_proposed : np.ndarray length max_k+1
         Proposed new partition
     dot_for_contacts : np.ndarray length k_max 
         np.concatenate([np.zeros(n+1)+n for n in range(1,m+1)])
@@ -353,9 +321,9 @@ def ReverseProposalProbabilityMediumInfo(C_proposed,dot_for_cases,k1,k2,LU_1D_to
 
     Parameters
     ----------
-    C_proposed : np.ndarray length max_k
+    C_proposed : np.ndarray length max_k+1
         Proposed new partition
-    dot_for_contacts : np.ndarray length k_max 
+    dot_for_cases : np.ndarray length max_k+1 
         np.concatenate([np.zeros(n+1)+n for n in range(1,m+1)])
     k1 : int
         1D index of the type of household from which an individual will be removed
@@ -395,39 +363,36 @@ def ReverseProposalProbabilityMediumInfo(C_proposed,dot_for_cases,k1,k2,LU_1D_to
 
     
 #%%% Likelihood Functions
-def final_size_distribution_homogeneous_no_intro(n,m,beta,phi):
-    """
-    Calculates the final size distribution for a given number of initial susceptible and infected individuals. All individuals are identical and there assumed to be no new introductions after the initial cases.
+def fs_distn_single_type(n: int,
+                         m: int,
+                         beta: float,
+                         phi: Callable,
+                         p_esc: float = 1):
+    """Calculates the final size distribution for an epidemic with a single type of individual. 
+       Implements the formula from Addy et al. 1991 equation (4) in single type special case.
 
-    Parameters
-    ----------
-    n : int
-        Initial number of susceptible
-    m : int
-        Initial Number of infected
-    beta : float
-        Person-to-person rate of transmission
-    phi : func
-        Moment generating function of the infectious period (e.g. for constant infectious period pass lamdba t: np.exp(-t))
-
-    Returns
-    -------
-    P : np.ndarray
-        Final size probability distribution
+    Args:
+        n (int): The number of individuals who are intially susceptible.
+        m (int): The number of individuals who are initially infected.
+        beta (float): The person-to-person transmission rate parameter.
+        phi (callable): The Laplace transform of the infectious period distribution. 
+        p_esc (float, optional): The probability of escaping external infection from outside. Defaults to 1 i.e. self contained outbreak.
+    Returns:
+        P (array): An array of length n+1 where P[j] is the probability that j of the n initially susceptible individuals are ultimately infected.
     """
     B = np.zeros((n+1,n+1))
     for j in range(n+1):
         for w in range(j+1):
-            B[j,w] = comb(j,w)/(comb(n,w)*phi((n-j)*beta)**(m+w))
+            B[j,w] = comb(j,w)/(comb(n,w)*phi((n-j)*beta)**(m+w)*p_esc**(n-j))
             if B[j,w] == np.inf:
                 print(j,w)
-
-    ones = np.ones(n+1) 
+           
     if cond(B)> 1e10:  
         #Matrix is ill-conditioned due to high transmission rate, approximate soluation with certain full final size
         P = np.zeros(n+1)
         P[-1] = 1
     else:    
+        ones = np.ones(n+1) 
         P = solve(B, ones, lower= True)
 
     return(P)
@@ -453,7 +418,20 @@ def LogFactorials(N):
         result[i] = result[i-1] + np.log(i)
     return result
 
-def FinalSizeDistributions(m: int,
+def LogGammas(N, alpha):
+    m = len(alpha)
+    result = np.zeros((m,N+1))
+    result[:,0] = np.zeros(m) + gammaln(alpha-1)
+    for n in range(m):
+        for i in range(1,N+1):
+            if alpha[n]-2+i > 0:
+                result[n,i] = result[n,i-1] + np.log(alpha[n]-2+i)
+            else:
+                result[n,i] = gammaln(alpha[n]-1+i)
+    return result
+
+
+def LogFinalSizeDistributions(m: int,
                            beta: float,
                            eta: float =1.0,
                            phi = lambda t: np.exp(-t)):
@@ -471,11 +449,11 @@ def FinalSizeDistributions(m: int,
     fs : list
         List of final size distributions for each household size from 1 to m
     """
-    
-    fs = [final_size_distribution_homogeneous_no_intro(n, 1, beta/(n**eta), phi) for n in range(1,m+1)]
-    return fs
+    fs = np.concatenate([fs_distn_single_type(n, 1, beta/(n**eta), phi) for n in range(1,m+1)])
+    log_fs = np.array([np.log(fs_k) if fs_k>0 else -1e10 for fs_k in fs])
+    return log_fs
 
-def PartitionLogLikelihood(C,beta,m,fs,LF):
+def PartitionLogLikelihood(C,beta,m,log_fs,LF,LG,dot_for_contacts):
     """
     Calculates the log-likelihood for a given partition and transmission parameter.
 
@@ -499,86 +477,32 @@ def PartitionLogLikelihood(C,beta,m,fs,LF):
     if beta<0:
         return -np.inf
     else:
-        ll= 0 
-        k=0
-        for n in range(1,m+1):
-            #total_hh_size_n = 0
-            for y in range(n+1):
+        log_fs_c = log_fs.copy()
+
+        ll = C.dot(log_fs_c)
+        
+        for k in range(len(C)):
                 count = int(C[k])
                 if count>0:
-                    if fs[n-1][y]<=0:
-                        ll += -np.inf
-                        break
-                    else:
-                        ll += count * np.log(fs[n-1][y])
-                        ll -= LF[count]
-                k+=1
-
+                    ll -= LF[count]
+        for n in range(m):
+            filter = dot_for_contacts==(n+1)
+            N_n = int(sum(C*filter))
+            ll+= LG[n,N_n]
+        if ll==np.inf:
+            print()
+            print(log_fs_c)
+            print()
+            print(LG)
+            print()
+            print(LF)
+            print()
             
         return ll
-    
-def PartitionEntropy(C,dot_for_contacts):
-    contacts = C*(dot_for_contacts)
-    total_contacts = C.dot(dot_for_contacts)
-    proportions = contacts/total_contacts
-    log_proportions = [np.log(c) if c!=0 else 0 for c in proportions ]
-    
-    return -proportions.dot(log_proportions)
-
-def PartitionPriorProbability(C,partition_prior_p,dot_for_contacts,m):
-    """    Calculates the prior probability of a given partition.
-
-    Parameters
-    ----------
-    C : np.ndarray
-        Partition of contacts and cases.
-    partition_prior : np.ndarray
-        Prior probabilities for each partition.
-    dot_for_contacts : np.ndarray
-        Array representing the dot product for contacts.
-    m : int
-        Maximum size of a household.
-
-    Returns
-    -------
-    prior_prob : float
-        Log of the prior probability of the partition.
-    """
-    x = np.array([C.dot(dot_for_contacts==n) for n in range(1,m+1)])
-    prior_prob = multinomial.logpmf(x = x, n = sum(x), p = partition_prior_p)     
-
-    return prior_prob
+        
 
 
 
-    
-#%% Plotting
-def PlotPartition(C,m,dot_for_contacts,llh=None,i=None,ax=None):
-    if ax == None:
-        fig,ax = plt.subplots()
-
-    contacts = np.zeros(m)
-    cases = np.zeros(m)
-    for n in range(1,m+1):
-        contacts[n-1] = n*sum(C[np.where(dot_for_contacts==n)])
-        cases[n-1] = (C[np.where(dot_for_contacts==n)]).dot(np.arange(n+1))
-        SAR = cases[n-1]/contacts[n-1]
-        plt.text(n+0.5, contacts[n-1]+10,"SAR = " + str(round(SAR,2)))
-    if llh!=None:
-        if i!=None:
-            plt.text(0.5,max(contacts),str(i) + "   " + str(llh))
-        else:
-            plt.text(0.5,max(contacts),str(llh))
-    else:
-        if i!=None:
-            plt.text(0.5,max(contacts),str(llh))
-
-
-    ax.bar(np.arange(2,m+2),contacts,label = "Contacts")
-    ax.bar(np.arange(2,m+2),cases,label = "Cases")
-    ax.set_xlabel("Household size")
-    ax.set_ylabel("Count")
-    ax.legend()
 #%% Run MCMC
 def RunPartitionsMCMC(C0: np.ndarray,
     beta0: float,
@@ -587,11 +511,10 @@ def RunPartitionsMCMC(C0: np.ndarray,
     n_iters: int,
     beta_proposal_sd: float,
     eta_proposal_sd: float,
+    alpha: np.ndarray,
     p_beta_move: float = 0.1,
     thin: int = 1,
     verbose: bool = True,
-    partition_prior: np.ndarray = np.zeros(1),
-    size_weighted: bool = False,
     beta_logprior = lambda b: 0 if (b>0 and b<10) else -np.inf,
     eta_logprior = lambda e: 0 if (e>=0 and e<=1) else -np.inf,
     info_level: str = "l",
@@ -620,8 +543,11 @@ def RunPartitionsMCMC(C0: np.ndarray,
         The probability of an MCMC step proposing a new beta as oppose to a move for the partition
     verbose: bool
         If True, tqdm loading bar is shown for MCMC 
-    partition_prior : np.ndarray
-        A probability vector of the multinomial prior on the size of households. 
+    hh_size_dist : np.ndarray
+        A probability vector giving the prior distribution of household sizes from 1 to m. If size_weighted is False, this is converted to a size-weighted distribution internally. 
+        First entry is the number of households with 2 indiviudals (1 primary case 1 contact)
+    size_weighted : bool
+        If True, hh_size_dist is treated as a size-weighted distribution already. If False it is converted to a size-weighted distribution internally.
     beta_logprior : function, optional
         A function that returns the log prior probability of the transmission rate beta (default is lambda beta: 0)
     eta_logprior : function, optional
@@ -629,7 +555,7 @@ def RunPartitionsMCMC(C0: np.ndarray,
     
     Returns
     -------
-    C : np.ndarray (n_iters+1,max_k)
+    C : np.ndarray (n_iters+1,max_k+1)
         Accepted partition at each iteration including the initial partition.
     likelihoods : np.ndarray n_iters+1
         Log-likelihood of each accepted partition. Calculated by PartitionLogLikelihood
@@ -653,22 +579,24 @@ def RunPartitionsMCMC(C0: np.ndarray,
         raise ValueError("Invalid value for info_level")
 
 
-    
-    if (partition_prior == np.zeros(1)).all():
-        #Check if partition_prior is provided, if not set to uniform prior
-        partition_prior_p = np.ones(m)/m
-        size_weighted = True
-    else:
-        if not size_weighted:
-            partition_prior_p = [i*p for i,p in enumerate(partition_prior,2)]
+    if (type(alpha)!= np.ndarray):
+        if type(alpha) == str:
+            if alpha == "Jeffreys":
+                alpha = np.zeros(m)+0.5
+            else:
+                 raise ValueError("alpha must be an array or for an uninformative prior the string Jeffreys")
         else:
-            partition_prior_p = partition_prior
-        partition_prior_p = partition_prior_p/np.sum(partition_prior_p) #Normalise prior
+            raise ValueError("alpha must be an array or for an uninformative prior the string Jeffreys")
+    elif len(alpha)!=m:
+        raise ValueError("alpha must have length m")
     
     dot_for_contacts = np.concatenate([np.zeros(n+1)+n for n in range(1,m+1)])
     dot_for_cases = np.concatenate([np.arange(0, n + 1) for n in range(1, m + 1)])
 
-    max_k = len(C0)
+    max_k = len(C0)-1
+    max_k_check = IndexChange2dTo1d(m,m)
+    if max_k != max_k_check:
+        raise ValueError("Length of C0 is not correct for the given value of m. Length of C0 must be " + str(max_k_check))
     
     #Generate random numbers
     u = np.log(np.random.uniform(0,1,size=n_iters)) #Accept/reject proposals
@@ -682,10 +610,11 @@ def RunPartitionsMCMC(C0: np.ndarray,
     i_offsets = 0
     
     #Initialise arrays to store partitions
-    C = np.zeros((n_iters+1,max_k))
+    C = np.zeros((n_iters+1,max_k+1),dtype=int)
     C[0] = C0
     
     #Precalculate log factorials for likelihood calculations
+    LG = LogGammas(int(sum(C0)),alpha) 
     LF = LogFactorials(int(sum(C0))) #Log factorials for likelihood calculations
 
     #Precalculate look-up arrays for moving between 1D and 2D indexing
@@ -697,37 +626,32 @@ def RunPartitionsMCMC(C0: np.ndarray,
             LU_2D_to_1D[n,y] = IndexChange2dTo1d(n,y)
         
     #Initialise array to store likelihoods
-    likelihoods = np.zeros(n_iters+1)
-    final_size_distributions = FinalSizeDistributions(m,beta0,eta0,phi)
-    final_size_distributions_proposed = final_size_distributions
-    likelihoods[0] = PartitionLogLikelihood(C0, beta0, m,final_size_distributions,LF)
+    likelihoods = np.zeros(n_iters+1,dtype = np.float32)
 
-    #Initialise array to store prior probabilities for partitions
-    part_logprior_probs = np.zeros(n_iters+1)
-    part_logprior_probs[0] = PartitionPriorProbability(C[0],partition_prior_p,dot_for_contacts,m)
+    log_final_size_distributions = LogFinalSizeDistributions(m,beta0,eta0,phi)
+
+    log_final_size_distributions_proposed = log_final_size_distributions
+    likelihoods[0] = PartitionLogLikelihood(C0, beta0, m,log_final_size_distributions,LF,LG,dot_for_contacts)
 
     #Initialise array to store prior probabilities for beta (transmission rate)
-    beta_logprior_probs = np.zeros(n_iters+1)
+    beta_logprior_probs = np.zeros(n_iters+1,dtype = np.float32)
     beta_logprior_probs[0] = beta_logprior(beta0) if beta_logprior is not None else 0
     
     #Initialise array to store beta values
-    betas = np.zeros(n_iters+1)
+    betas = np.zeros(n_iters+1,dtype = np.float32)
     betas[0] = beta0
 
     #Initialise array to store prior probabilities for beta (transmission rate)
-    eta_logprior_probs = np.zeros(n_iters+1)
+    eta_logprior_probs = np.zeros(n_iters+1,dtype = np.float32)
     eta_logprior_probs[0] = eta_logprior(eta0) if beta_logprior is not None else 0
     
     #Initialise array to store beta values
-    etas = np.zeros(n_iters+1)
+    etas = np.zeros(n_iters+1,dtype = np.float32)
     etas[0] = eta0
 
-    #Initialise array to store entropy values
-    entropies = np.zeros(n_iters+1)
-    entropies[0] = PartitionEntropy(C0, dot_for_contacts)
 
     #Initialise array for CHOSEN INDICESAdd commentMore actions
-    chosen_indices = np.zeros((n_iters,2))
+    #chosen_indices = np.zeros((n_iters,2))
 
 
 
@@ -740,7 +664,8 @@ def RunPartitionsMCMC(C0: np.ndarray,
             beta_proposed = betas[i]+beta_proposal_offsets[i_offsets]
             eta_proposed = etas[i]+eta_proposal_offsets[i_offsets]
             i_offsets += 1
-            final_size_distributions_proposed = FinalSizeDistributions(m,beta_proposed,eta_proposed)
+            
+            log_final_size_distributions_proposed = LogFinalSizeDistributions(m,beta_proposed,eta_proposed,phi=phi)
             beta_logprior_proposed = beta_logprior(beta_proposed)
             eta_logprior_proposed = eta_logprior(eta_proposed) 
             log_reverse_proposal_prob = 0
@@ -775,15 +700,18 @@ def RunPartitionsMCMC(C0: np.ndarray,
                 
                 
             
-        llh_proposed = PartitionLogLikelihood(C_proposed, beta_proposed, m,final_size_distributions_proposed,LF) 
+        llh_proposed = PartitionLogLikelihood(C_proposed, beta_proposed, m,log_final_size_distributions_proposed,LF,LG,dot_for_contacts) 
 
-        llhA = llh_proposed - likelihoods[i]
+        
+        
+        try:
+            llhA = llh_proposed - likelihoods[i]
+        except:
+            print(llh_proposed, likelihoods[i])
 
         proposalA = log_reverse_proposal_prob-log_proposal_prob
 
-        part_logprior_proposed = PartitionPriorProbability(C_proposed,partition_prior_p,dot_for_contacts,m)
-
-        priorA = part_logprior_proposed-part_logprior_probs[i] + beta_logprior_proposed - beta_logprior_probs[i] + eta_logprior_proposed-eta_logprior_probs[i]
+        priorA =  beta_logprior_proposed - beta_logprior_probs[i] + eta_logprior_proposed-eta_logprior_probs[i]
 
 
         #Decide accept of reject
@@ -793,26 +721,21 @@ def RunPartitionsMCMC(C0: np.ndarray,
         if A>u[i] and beta_proposed>0:
             C[i+1] = C_proposed
             likelihoods[i+1] = llh_proposed
-            part_logprior_probs[i+1] = part_logprior_proposed
             beta_logprior_probs[i+1] = beta_logprior_proposed
             betas[i+1] = beta_proposed
             eta_logprior_probs[i+1] = eta_logprior_proposed
             etas[i+1] = eta_proposed
-            final_size_distributions = final_size_distributions_proposed
-            entropies[i+1] = PartitionEntropy(C_proposed, dot_for_contacts)
+            log_final_size_distributions = log_final_size_distributions_proposed
             
         else:
             C[i+1]= C[i]
             likelihoods[i+1] = likelihoods[i]
-            part_logprior_probs[i+1] = part_logprior_probs[i]
             beta_logprior_probs[i+1] = beta_logprior_probs[i]
             betas[i+1] = betas[i]
             eta_logprior_probs[i+1] = eta_logprior_probs[i]
             etas[i+1] = etas[i]
-            entropies[i+1] = entropies[i]
 
-        chosen_indices[i] = [k1,k2]
             
     C_results = C[::thin]   
-    return C_results,likelihoods[::thin],betas[::thin],etas[::thin],part_logprior_probs[::thin],beta_logprior_probs[::thin],eta_logprior_probs[::thin],entropies[::thin],chosen_indices[::thin]
+    return C_results,likelihoods[::thin],betas[::thin],etas[::thin],beta_logprior_probs[::thin],eta_logprior_probs[::thin]
 
