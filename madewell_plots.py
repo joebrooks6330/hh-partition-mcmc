@@ -25,13 +25,29 @@ variant_values = np.array(df["Variant"]).astype(str).tolist()
 color_dict = {"Wild": "blue", "Alpha": "green", "Delta": "orange", "Omicron": "red","Not Specified/Other": "black"}
 variant_values = [v if v in color_dict.keys() else "Not Specified/Other" for v in variant_values]
 
-eta_fixed = 0.0
+fixed = False
+eta_fixed = 1.
+
+S  = 100
+
+infectious_period_assumption_dict = {"Fixed": lambda t: np.exp(-t),
+                                     "Markov": lambda t: 1/(1+t),
+                                     "Gamma2": lambda t: (1+t/2)**(-2)}
+inf_period_str = "Gamma2" 
+phi = infectious_period_assumption_dict[inf_period_str]
+
+
 
 
 results_fn = "outputs/madewell_fits_results"
-results_suffix = f"_eta={eta_fixed}"
+if fixed:
+    results_suffix = f"_eta={eta_fixed}_{inf_period_str}_S={S}"
+else:
+    results_suffix = f"_Carazo_eta_{inf_period_str}_S={S}"
 
-results_fn = results_fn + results_suffix + ".pkl"
+
+
+results_fn = results_fn + results_suffix + f".pkl"
 
 
 if isfile(results_fn):
@@ -40,6 +56,7 @@ if isfile(results_fn):
 else:
     print(f"File {results_fn} not found.")
     quit()
+
 
 index_arr = results[0]
 results_arr = results[1]
@@ -51,33 +68,50 @@ SITP_results = {}
 SITP_means = {} 
 SITP_CI = {}
 eta_results = {}
+C_results = {}
 
 N_datasets = max(index_arr[:,1]) + 1
+
 
 
 for i in range(N_datasets):
     ds_beta_results = []
     ds_eta_results = []
+    ds_C_results = []
     for j in range(len(index_arr)):
         if index_arr[j,1] == i:
             beta_chain = results_arr[j][2]
-            burn_in = len(beta_chain)//10
+            burn_in = len(beta_chain)//5
             beta_chain = beta_chain[burn_in:]
             ds_beta_results.append(beta_chain)
             
             eta_chain = results_arr[j][3][burn_in:]
             ds_eta_results.append(eta_chain)
             
+            C_chain = results_arr[j][0][burn_in:]
+            ds_C_results.append(C_chain)
+            
+            
     beta_results[i] = np.concatenate(ds_beta_results)
     beta_means[i] = np.mean(beta_results[i])
     beta_CI[i] = (np.percentile(beta_results[i], 2.5), np.percentile(beta_results[i], 97.5))
+    
+    
     
     eta_results[i] = np.concatenate(ds_eta_results)
     
     SITP_results[i] = 1-np.exp(-beta_results[i]/(n_contacts**eta_results[i]))
     SITP_means[i] = np.mean(SITP_results[i])
     SITP_CI[i] = (np.percentile(SITP_results[i], 2.5), np.percentile(SITP_results[i], 97.5))
+    
+    C_results[i] = np.concatenate(ds_C_results)
 
+fig,axs = plt.subplots(5,6, figsize=(15,20))
+for i in range(N_datasets):
+    ax = axs[i//6,i%6]
+    ax.plot(beta_results[i])
+    ax.set_title(dataset_names[i])
+plt.show()
 
 beta_CI_arr = np.array([beta_CI[i] for i in range(N_datasets)])
 beta_x_max = max(beta_CI_arr[:,1])
@@ -149,7 +183,7 @@ axs.set_ylim(-0.5,plot_pos+buffer+1)
 plt.savefig(f'figures/madewell_beta_estimates{results_suffix}.png', bbox_inches='tight')
 
 
-data_for_table = {"SAR": [round(SAR_values[i],3) for i in sorted_indices[::-1]],
+data_for_table = {"SAR": [round(SAR_values[i],3) for i in sorted_indices[::-1]], # type: ignore
                   "Mean Size": [mean_sizes[i] for i in sorted_indices[::-1]],
                   "N": [N_households[i] for i in sorted_indices[::-1]],}
 df_for_table = pd.DataFrame(data_for_table)

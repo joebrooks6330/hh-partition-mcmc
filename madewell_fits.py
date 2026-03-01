@@ -1,3 +1,4 @@
+# region load libraries
 import pandas as pd
 import numpy as np
 from numpy import array
@@ -9,7 +10,9 @@ from tqdm import tqdm
 from argparse import ArgumentParser
 from pickle import dump,load
 from scipy.stats import norm,beta
+# endregion
 
+# region Load Madewell et al. data and set eta and phi assumptions
 filepath = 'datasets/household_studies_low_info_madewell.csv'
 
 if isfile(filepath):
@@ -17,19 +20,46 @@ if isfile(filepath):
 else:
     print(f"File {filepath} not found.")
     quit()
+    
+fixed = False
+eta_fixed = 1.
 
-eta_fixed = 0.
+infectious_period_assumption_dict = {"Fixed": lambda t: np.exp(-t),
+                                     "Markov": lambda t: 1/(1+t),
+                                     "Gamma2": lambda t: (1+t/2)**(-2)}
+inf_period_str = "Gamma2" 
+phi = infectious_period_assumption_dict[inf_period_str]
+
+alphas = df.alpha.to_list()
+alphas = [np.array([float(a) for a in alpha.split(",")]) for alpha in alphas]
+alphas_sw = [np.array([a*i for i,a in enumerate(alpha,1)]) for alpha in alphas]
+S = 100
+alphas_sw = [S*alpha[1:]/np.sum(alpha[1:]) for alpha in alphas_sw]
 
 
 data_to_fit = array(df[['Number of Households', 'Number of household contacts',
-       'Number of household secondary cases',
-       'Maximum number of household contacts']])
+       'Number of household secondary cases']])
 data_to_fit = array([np.insert(v,0,i) for i,v in enumerate(data_to_fit)]) #Add index for datasets
 
 
 results_fn = "outputs/madewell_fits_results"
-results_suffix = f"_eta={eta_fixed}"
-results_fn = results_fn + results_suffix + ".pkl"
+if fixed:
+    results_suffix = f"_eta={eta_fixed}_{inf_period_str}_S={S}"
+    eta_sigma = 0.
+else:
+    results_suffix = f"_Carazo_eta_{inf_period_str}_S={S}"
+    eta_posterior_fn = "outputs\\eta_kde_posterior_Carazo_high_info_" + inf_period_str + ".pkl"
+    if isfile(eta_posterior_fn):
+        with open(eta_posterior_fn,"rb") as f:
+            eta_posterior = load(f)
+    else:
+        print("KDE not computed for eta from Carazo et al. high info fit")
+        quit()
+
+
+results_fn = results_fn + results_suffix + f"_S={S}.pkl"
+
+# endregion
 
 class MW_datasets_chain():
      def __init__(self):
@@ -41,12 +71,13 @@ class MW_datasets_chain():
         N = p[2]
         n = p[3]
         y = p[4]
-        m = p[5]
-        beta0 = 1.0
+        alpha = alphas_sw[p[1]]
+        m = len(alpha)
+        beta0 = 0.5
         eta0 = eta_fixed
         #eta_logprior = beta(1.01,2).logpdf
         
-        p_beta_move = 10/N
+        p_beta_move = min(10/N,0.5)
         n_iters = int(1000*N)
         try:
             C0 = FlatPartition(n,y,N,m)
@@ -56,11 +87,14 @@ class MW_datasets_chain():
                                         int(m),
                                         n_iters,
                                         0.1,
-                                        0.,
+                                        0.1,
+                                        alpha=alpha,
                                         p_beta_move = p_beta_move,
                                         thin = 10,
                                         verbose = False,
-                                        info_level = 'l')
+                                        info_level = 'l',
+                                        phi = phi,
+                                        eta_logprior = eta_posterior.logpdf if not fixed else  lambda e: 0 if (e>=0 and e<=1) else -np.inf)# type: ignore
 
         except:
             import traceback
@@ -76,7 +110,11 @@ def main(no_of_workers,n_chains):
     data_to_fit_repeated = np.repeat(data_to_fit,n_chains,axis=0)
     data_to_fit_repeated = array([np.insert(v,0,i) for i,v in enumerate(data_to_fit_repeated)]) #Add chain index
     index_arr = data_to_fit_repeated[:,:2]
-    print("Starting fits (eta fixed = ", eta_fixed, ") with", no_of_workers, "workers and", n_chains, "chains per dataset. Total number of chains:", len(list(data_to_fit_repeated)))
+    print("Starting fits with ", inf_period_str ,"infectious period assumption and", no_of_workers, "workers and", n_chains, "chains per dataset. Total number of chains:", len(list(data_to_fit_repeated)))
+    if fixed:
+        print(f"Using fixed eta = {eta_fixed}")
+    else:
+        print("Using eta from Carazo et al.")
 
     chain = MW_datasets_chain()
 

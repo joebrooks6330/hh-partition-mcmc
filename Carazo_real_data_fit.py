@@ -4,7 +4,8 @@ from HH_case_partition_MCMC import RunPartitionsMCMC,IndexChange1dTo2d
 from partition_functions import FlatPartition,get_simple_dataset
 from pickle import dump
 from os.path import isfile
-from scipy.stats import norm
+from scipy.stats import norm,poisson
+from scipy.optimize import minimize
 import numpy as np
 
 
@@ -12,88 +13,66 @@ import numpy as np
 data_fn = "CARAZO_2021_FCDATASET.csv"
 dataset_H =array(genfromtxt("datasets\\" + data_fn,delimiter=','))
 
-
 k_max = len(dataset_H)-1
 m = IndexChange1dTo2d(k_max)[0]
 dataset_L = get_simple_dataset(dataset_H,m)
 
+quebec_census_data = np.array([138280, 44770,41545,17555*2/3,17555/3]) #(assume 5+ person hh are split 2/3 5 person and 1/3 6 person)
+quebec_census_data_sw = np.array([cd*i for i,cd in enumerate(quebec_census_data,2)])
+quebec_census_data_proportions = quebec_census_data_sw/sum(quebec_census_data_sw)
+
+S = 200 #Concentration parameter
+alpha = S*quebec_census_data_proportions
 
 dot_for_contacts = concatenate([zeros(n+1)+n for n in range(1,m+1)])
-partition_prior = array([sum(dataset_H*(dot_for_contacts==n)) for n in range(1,m+1)])
 
-n_iters = int(1e7)
-p_beta_move=0.01
+n_iters = int(5e7)
+p_beta_move= 0.01
 
 #phi(-t) is MGF of infectious period distribution
-phi = lambda t: np.exp(-t) # Constant infectious period
-phi = lambda t: 1/(1+t) # Markov
-a=2
-phi = lambda t: (1+t/a)**(-a) #General gamma(a,a)
+infectious_period_assumption_dict = {"Fixed": lambda t: np.exp(-t),
+                                     "Markov": lambda t: 1/(1+t),
+                                     "Gamma2": lambda t: (1+(t/2))**(-2)}
 
+inf_period_str = "Gamma2" 
 
-
-
+print("Using infectious period assumption:", inf_period_str,end = "\n")
+phi = infectious_period_assumption_dict[inf_period_str]
 
 #Low information (eta not fixed)
-results_fn_L = "outputs\\" + data_fn.split(".")[0] + "_low_info_results_Gamma2.pkl"
+results_fn_L = "outputs\\"  + data_fn.split(".")[0] + "_low_info_results_" + inf_period_str + ".pkl"
 
 if isfile(results_fn_L):
     print("Low info MCMC has already been run for " + data_fn)
 else:
     print("Running MCMC for low info for " + data_fn)
     C0_L = FlatPartition(dataset_L[2],dataset_L[1],dataset_L[0],m)
-    low_info_results = RunPartitionsMCMC(C0_L,0.01,0.01,m,1*n_iters,0.1,0.1,p_beta_move,thin=100,verbose=True,phi = phi)
+    low_info_results = RunPartitionsMCMC(dataset_H,0.1,0.1,m,1*n_iters,0.1,0.1,alpha,p_beta_move,thin=100,verbose=True,phi = phi)
 
     with open(results_fn_L,"wb") as f:
         dump(low_info_results,f)
-
-#Low information (eta not fixed, priored partition)
-results_fn_L_priored = "outputs\\" + data_fn.split(".")[0] + "_low_info_size_dist_priored_results.pkl"
-
-if isfile(results_fn_L_priored):
-    print("Low info MCMC has already been run for " + data_fn)
-else:
-    print("Running MCMC for low info for " + data_fn)
-    C0_L = FlatPartition(dataset_L[2],dataset_L[1],dataset_L[0],m)
-    low_info_results = RunPartitionsMCMC(C0_L,0.01,0.01,m,n_iters,0.1,0.1,p_beta_move,thin=100,verbose=True,partition_prior=partition_prior,phi = phi)
-
-    with open(results_fn_L_priored,"wb") as f:
-        dump(low_info_results,f)
-
-#Low information (eta priored)
-for eta in [0,0.5,0.7,1]:
-    results_fn_L_eta = "outputs\\" + data_fn.split(".")[0] + "_low_info_results_eta=" + str(eta) +"_prior.pkl"
-    if isfile(results_fn_L_eta):
-        print("Low info MCMC has already been run for " + data_fn + " with fixed eta = " + str(eta))
-    else:
-        print("Running MCMC for low info for " + data_fn + " with fixed eta = " + str(eta))
-        C0_L = FlatPartition(dataset_L[2],dataset_L[1],dataset_L[0],m)
-        low_info_results = RunPartitionsMCMC(C0_L,0.1,0.1,m,n_iters,0.1,0.1,p_beta_move,thin=100,verbose=True,eta_logprior=norm(eta,0.1).logpdf,phi = phi)# type: ignore 
-
-        with open(results_fn_L_eta,"wb") as f:
-            dump(low_info_results,f)
-
-
+        
 #Medium Information
-results_fn_M = "outputs\\" + data_fn.split(".")[0] + "_medium_info_results_Gamma2.pkl"
+results_fn_M = "outputs\\"  + data_fn.split(".")[0] + "_medium_info_results_" + inf_period_str + ".pkl"
 
 if isfile(results_fn_M):
     print("Medium info MCMC has already been run for " + data_fn)
 else:
     print("Running MCMC for medium info for " + data_fn)
-    medium_info_results = RunPartitionsMCMC(dataset_H,0.1,0.1,m,n_iters,0.1,0.1,p_beta_move,thin=100,verbose=True,info_level="m",phi = phi)
+    medium_info_results = RunPartitionsMCMC(dataset_H,0.1,0.1,m,int(0.1*n_iters),0.1,0.1,p_beta_move=10*p_beta_move,thin=10,verbose=True,info_level="m",phi = phi)
 
     with open(results_fn_M,"wb") as f:
         dump(medium_info_results,f)
 
 #High Information
-results_fn_H = "outputs\\" + data_fn.split(".")[0] + "_high_info_results_Gamma2.pkl"
-
+results_fn_H = "outputs\\" + data_fn.split(".")[0] + "_high_info_results_" + inf_period_str + ".pkl"
 if isfile(results_fn_H):
     print("High info MCMC has already been run for " + data_fn)
 else:
     print("Running MCMC for high info for " + data_fn)
-    high_info_results = RunPartitionsMCMC(dataset_H,1,1,m,int(10*n_iters*p_beta_move),0.1,0.1,1.,thin=1,verbose=True,info_level="h",phi = phi)
+    high_info_results = RunPartitionsMCMC(dataset_H,0.1,0.1,m,int(n_iters*p_beta_move),0.1,0.1,p_beta_move=1.,thin=1,verbose=True,info_level="h",phi = phi)
 
     with open(results_fn_H,"wb") as f:
         dump(high_info_results,f)
+        
+quit()        

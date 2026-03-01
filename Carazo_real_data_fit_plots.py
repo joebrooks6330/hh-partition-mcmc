@@ -5,7 +5,7 @@ import matplotlib.pyplot as plt
 from seaborn import kdeplot,heatmap
 import numpy as np
 from numpy import genfromtxt
-from HH_case_partition_MCMC import IndexChange1dTo2d,IndexChange2dTo1d, final_size_distribution_homogeneous_no_intro
+from HH_case_partition_MCMC import IndexChange1dTo2d,IndexChange2dTo1d, fs_distn_single_type
 from statsmodels.stats.proportion import proportion_confint
 from scipy.stats import beta,gaussian_kde
 from tqdm import tqdm
@@ -67,8 +67,10 @@ SAR_by_size_binom_CI =  np.array([proportion_confint(cases_by_size[i],contacts_b
 #region Set Infectious Period Assumption and load MCMC results
 infectious_period_assumption_dict = {"Fixed": lambda t: np.exp(-t),
                                      "Markov": lambda t: 1/(1+t),
-                                     "Gamma2": lambda t: (1+t/2)**(-2)}
-inf_period_str = "Markov" 
+                                     "Gamma2": lambda t: (1+(t/2))**(-2)}
+
+
+inf_period_str = "Gamma2" 
 print("Using infectious period assumption:", inf_period_str,end = "\n\n\n")
 phi = infectious_period_assumption_dict[inf_period_str]
 
@@ -85,12 +87,21 @@ if isfile(results_fn_L):
 else:
     print("Low info MCMC results missing for " + data_fn + ". Please run script.")
     pass
-burn_in = len(low_info_results[0])//20
+burn_in = len(low_info_results[0])//10
 beta_results_L = low_info_results[2][burn_in:]
 eta_results_L = low_info_results[3][burn_in:]
 C_results_L = low_info_results[0][burn_in:]
 
+# hh_sizes_dist_L = np.array([sum(C_results_L[i]*(dot_for_contacts==n)) for i in range(len(C_results_L)) for n in range(1,m+1)]).reshape(len(C_results_L),m)
 
+# alpha = np.array([41.23596567, 20.02604335, 24.77796057, 8.72501901, 5.23501141])
+# alpha_plot = sum(C_results_L[0])*alpha/(sum(alpha))
+# plt.plot(hh_sizes_dist_L)
+# plt.hlines(alpha_plot,0,len(C_results_L),linestyle="--")
+# plt.show()
+# # plt.plot(beta_results_L)
+# # plt.show()
+# quit()
 # Medium information results
 if isfile(results_fn_M):
     print("Medium info MCMC has already been run for " + data_fn + "\nLoading results...\n")
@@ -100,7 +111,7 @@ else:
     print("Medium info MCMC results missing for " + data_fn + ". Please run script.")
     quit()
 
-burn_in = len(medium_info_results[0])//10
+burn_in = len(medium_info_results[0])//5
 beta_results_M = medium_info_results[2][burn_in:]
 eta_results_M = medium_info_results[3][burn_in:]
 C_results_M = medium_info_results[0][burn_in:]
@@ -117,7 +128,7 @@ else:
 
 
 
-burn_in = len(high_info_results[0])//10
+burn_in = len(high_info_results[0])//5
 beta_results_H = high_info_results[2][burn_in:]
 eta_results_H = high_info_results[3][burn_in:]
 C_results_H = high_info_results[0][burn_in:]
@@ -154,7 +165,7 @@ for info in information_strs:
     i_samples = np.random.randint(len(beta_results[info]),size=1000)
     household_size_dist_weighted_samples[info] = [[n*sum(C_results[info][i]*(dot_for_contacts==n))  for n in range(1,m+1)] for i in i_samples]
     household_size_dist_samples[info] = [[sum(C_results[info][i]*(dot_for_contacts==n))  for n in range(1,m+1)] for i in i_samples]
-    SAR_estimate_by_size_samples[info] = [[final_size_distribution_homogeneous_no_intro(n,1,beta_results[info][i]/(n**eta_results[info][i]),phi).dot(np.arange(n+1))/n for n in range(1,m+1)] for i in i_samples]
+    SAR_estimate_by_size_samples[info] = [[fs_distn_single_type(n,1,beta_results[info][i]/(n**eta_results[info][i]),phi).dot(np.arange(n+1))/n for n in range(1,m+1)] for i in i_samples]
     SAR_overall_samples[info] = [np.dot(hh_dist/sum(hh_dist),SAR_by_size_est) for hh_dist,SAR_by_size_est in zip(household_size_dist_weighted_samples[info],SAR_estimate_by_size_samples[info]) ]
 # endregion
 
@@ -170,19 +181,19 @@ plot_labels = ["A","B","C","D"]
 fig.suptitle(r"Posteriors on $\theta$ - Carazo et al. (2021) ",fontsize = 40)
 ax1.set_ylabel(r"Density mixing parameter - $\eta$",fontsize = 20,labelpad=10)
 
-ax1.scatter(beta_results_L,eta_results_L,s=.5,color = colors["Low"])
+ax1.scatter(beta_results_L,eta_results_L,s=.5,color = colors["Low"],alpha=0.1)
 ax1.scatter(np.mean(beta_results_L),np.mean(eta_results_L), s= 50, marker = "x",color = "black")
 ax1.axvline(np.mean(beta_results_L), color="black", linestyle=":", alpha=0.7)
 ax1.axhline(np.mean(eta_results_L), color="black", linestyle=":", alpha=0.7)
 ax1.set_title("Low information",fontsize=20)
 
-ax2.scatter(beta_results_M,eta_results_M,s=0.5,color = colors["Medium"])
+ax2.scatter(beta_results_M,eta_results_M,s=0.5,color = colors["Medium"],alpha=0.1)
 ax2.scatter(np.mean(beta_results_M),np.mean(eta_results_M), s= 50, marker = "x",color = "black")
 ax2.axvline(np.mean(beta_results_M), color="black", linestyle=":", alpha=0.7)
 ax2.axhline(np.mean(eta_results_M), color="black", linestyle=":", alpha=0.7)
 ax2.set_title("Medium Information",fontsize=20)
 
-ax3.scatter(beta_results_H,eta_results_H,s=0.5,color = colors["High"])
+ax3.scatter(beta_results_H,eta_results_H,s=0.5,color = colors["High"],alpha=0.1)
 ax3.scatter(np.mean(beta_results_H),np.mean(eta_results_H), s= 50, marker = "x",color = "black")
 ax3.axvline(np.mean(beta_results_H), color="black", linestyle=":", alpha=0.7)
 ax3.axhline(np.mean(eta_results_H), color="black", linestyle=":", alpha=0.7)
@@ -202,7 +213,7 @@ for info in information_strs:
 for i,ax in enumerate(axes):
     if i<3:
         ax.set_ylim(-0.05,1.05)
-        ax.set_xlim(0.,0.8)
+        ax.set_xlim(0.,1.05)
         ax.set_xlabel(r"Base transmission rate - $\beta$",fontsize = 20)
         ax.text(0.025,0.925,plot_labels[i],fontsize = 30)
     else:
@@ -223,8 +234,8 @@ ax4_hh_size.bar(x = x_pos-0.25-0.0625, height = hh_size_dist_sample_mean, yerr =
 ax4_hh_size.bar(x = x_pos-0.25+0.0625, height = hh_size_dist_data,color = 'black',width = 0.125,label = "Observed size dist.")
 ax4_hh_size.legend(fontsize=12, loc = "upper right")
 ax4_hh_size.set_yticks(np.arange(0,1450,200))
-ax4_hh_size.set_ylim(0,1450)
-ax4_hh_size.set_ylabel("Number of households",rotation=270, fontsize=20,labelpad=25)
+ax4_hh_size.set_ylim(0,1600)
+ax4_hh_size.set_ylabel("Number of house holds",rotation=270, fontsize=20,labelpad=25)
 ax4_hh_size.grid(False)
 
 for i,info in enumerate(information_strs):

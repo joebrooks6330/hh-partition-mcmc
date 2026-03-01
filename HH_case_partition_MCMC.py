@@ -511,7 +511,7 @@ def RunPartitionsMCMC(C0: np.ndarray,
     n_iters: int,
     beta_proposal_sd: float,
     eta_proposal_sd: float,
-    alpha: np.ndarray,
+    alpha: np.ndarray= np.zeros(1),
     p_beta_move: float = 0.1,
     thin: int = 1,
     verbose: bool = True,
@@ -579,14 +579,9 @@ def RunPartitionsMCMC(C0: np.ndarray,
         raise ValueError("Invalid value for info_level")
 
 
-    if (type(alpha)!= np.ndarray):
-        if type(alpha) == str:
-            if alpha == "Jeffreys":
-                alpha = np.zeros(m)+0.5
-            else:
-                 raise ValueError("alpha must be an array or for an uninformative prior the string Jeffreys")
-        else:
-            raise ValueError("alpha must be an array or for an uninformative prior the string Jeffreys")
+    if (alpha == np.zeros(1)).all():
+        #Default alpha for no prior information on household size distribution is a flat Dirichlet prior
+        alpha = np.zeros(m)+100
     elif len(alpha)!=m:
         raise ValueError("alpha must have length m")
     
