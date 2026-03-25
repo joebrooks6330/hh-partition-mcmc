@@ -23,7 +23,7 @@ detail_values = ["l"]#,"m","h"]
 I_dist_assumption_dict = {"Fixed": lambda t: np.exp(-t),
                           "Markov": lambda t: 1/(1+t),
                           "Gamma2": lambda t: (1+(t/2))**(-2)}
-I_Dist_str = "Gamma2"
+I_Dist_str = "Markov"
 
 n_iters = int(1e6)
 beta0 = 1.0 
@@ -33,18 +33,18 @@ N_datasets = 100
 hh_dist_str = "UK"  # "UK" or "split"
 C_example = synthetic_datasets[I_Dist_str][beta_values[0]][eta_values[0]][N_hh][hh_dist_str][0]
 m = IndexChange1dTo2d(len(C_example)-1)[0]
-S = 1000 #Scaling variable for Dirichlet parameters. 100 or 1000
+alpha_0 = 100 #Scaling variable for Dirichlet parameters. 100 or 1000
 
 
-params_fn = f"outputs/synthetic_data_validation_{hh_dist_str}_S={S}_I_dist={I_Dist_str}_params"
-results_fn = f"outputs/synthetic_data_validation_{hh_dist_str}_S={S}_I_dist={I_Dist_str}_results"
+params_fn = f"outputs/synthetic_data_validation_{hh_dist_str}_alpha_0={alpha_0}_I_dist={I_Dist_str}_params"
+results_fn = f"outputs/synthetic_data_validation_{hh_dist_str}_alpha_0={alpha_0}_I_dist={I_Dist_str}_results"
 
 
 if isfile("datasets/household_size_distributions.pkl"):
     with open("datasets/household_size_distributions.pkl", "rb") as f:
         household_size_distributions = load(f)
     alpha = np.array([i*p for i,p in enumerate(household_size_distributions[hh_dist_str],2)])
-    alpha = S*alpha/sum(alpha)
+    alpha = alpha_0*alpha/sum(alpha)
 else:
     print("Household size distributions file not found, cannot run with prior")
     quit()

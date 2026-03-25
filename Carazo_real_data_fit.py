@@ -21,8 +21,8 @@ quebec_census_data = np.array([138280, 44770,41545,17555*2/3,17555/3]) #(assume 
 quebec_census_data_sw = np.array([cd*i for i,cd in enumerate(quebec_census_data,2)])
 quebec_census_data_proportions = quebec_census_data_sw/sum(quebec_census_data_sw)
 
-S = 200 #Concentration parameter
-alpha = S*quebec_census_data_proportions
+alpha_0 = 200 #Concentration parameter
+alpha = alpha_0*quebec_census_data_proportions
 
 dot_for_contacts = concatenate([zeros(n+1)+n for n in range(1,m+1)])
 
@@ -34,7 +34,7 @@ infectious_period_assumption_dict = {"Fixed": lambda t: np.exp(-t),
                                      "Markov": lambda t: 1/(1+t),
                                      "Gamma2": lambda t: (1+(t/2))**(-2)}
 
-inf_period_str = "Gamma2" 
+inf_period_str = "Fixed" 
 
 print("Using infectious period assumption:", inf_period_str,end = "\n")
 phi = infectious_period_assumption_dict[inf_period_str]

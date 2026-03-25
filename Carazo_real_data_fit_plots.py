@@ -70,7 +70,7 @@ infectious_period_assumption_dict = {"Fixed": lambda t: np.exp(-t),
                                      "Gamma2": lambda t: (1+(t/2))**(-2)}
 
 
-inf_period_str = "Gamma2" 
+inf_period_str = "Fixed" 
 print("Using infectious period assumption:", inf_period_str,end = "\n\n\n")
 phi = infectious_period_assumption_dict[inf_period_str]
 
@@ -222,16 +222,16 @@ for i,ax in enumerate(axes):
 x_pos_all = np.arange(1,m+2,1)
 x_pos = x_pos_all[1:]
 ax4.set_ylim(0.15,0.55)
-ax4.scatter(x = [1-0.09375],y = [SAR_overall], color = 'black',marker='o') 
-ax4.errorbar(x_pos+0.0625, SAR_by_size, yerr = [SAR_by_size- bootstrap_CI[:,0] ,  bootstrap_CI[:,1]-SAR_by_size],
+ax4.scatter(x = [1+0.09375],y = [SAR_overall], color = 'black',marker='o') 
+ax4.errorbar(x_pos-0.0625, SAR_by_size, yerr = [SAR_by_size- bootstrap_CI[:,0] ,  bootstrap_CI[:,1]-SAR_by_size],
               fmt = 'o', color = 'black', ecolor = 'black', elinewidth = 3, capsize = 5, label = "Observed SAR")
 
 ax4_hh_size = ax4.twinx()
 hh_size_dist_sample_mean = np.mean(household_size_dist_samples["Low"],axis=0)
 hh_size_dist_sample_CI = np.percentile(household_size_dist_samples["Low"],[2.5,97.5],axis=0)
 yerr = [hh_size_dist_sample_mean-hh_size_dist_sample_CI[0,:],hh_size_dist_sample_CI[1,:]- hh_size_dist_sample_mean]
-ax4_hh_size.bar(x = x_pos-0.25-0.0625, height = hh_size_dist_sample_mean, yerr = yerr,color = colors["Low"],width = 0.125,capsize=5,label = "Estimated size dist. (low info)")
-ax4_hh_size.bar(x = x_pos-0.25+0.0625, height = hh_size_dist_data,color = 'black',width = 0.125,label = "Observed size dist.")
+ax4_hh_size.bar(x = x_pos+0.25+0.0625, height = hh_size_dist_sample_mean, yerr = yerr,color = colors["Low"],width = 0.125,capsize=5,label = "Estimated size dist. (low info)")
+ax4_hh_size.bar(x = x_pos+0.25-0.0625, height = hh_size_dist_data,color = 'black',width = 0.125,label = "Observed size dist.")
 ax4_hh_size.legend(fontsize=12, loc = "upper right")
 ax4_hh_size.set_yticks(np.arange(0,1450,200))
 ax4_hh_size.set_ylim(0,1600)
@@ -241,7 +241,7 @@ ax4_hh_size.grid(False)
 for i,info in enumerate(information_strs):
     SAR_estimate_overall_mean = np.mean(SAR_overall_samples[info])
     SAR_estimate_overall_CI = np.percentile(SAR_overall_samples[info],[2.5,97.5])
-    ax4.errorbar(x = [1+0.09375+0.0625*(i)], y = [np.mean(SAR_overall_samples[info])],
+    ax4.errorbar(x = [1-0.09375-0.0625*(i)], y = [np.mean(SAR_overall_samples[info])],
                 yerr = [[SAR_estimate_overall_mean-SAR_estimate_overall_CI[0]],[SAR_estimate_overall_CI[1]- SAR_estimate_overall_mean]],
                 fmt = 'o',color  = colors[info], elinewidth = 3, capsize = 5)
     
@@ -249,7 +249,7 @@ for i,info in enumerate(information_strs):
     SAR_estimate_by_size_sample_CI = np.percentile(SAR_estimate_by_size_samples[info],[2.5,97.5],axis=0)
     
     yerr = [SAR_estimate_by_size_sample_mean-SAR_estimate_by_size_sample_CI[0,:],SAR_estimate_by_size_sample_CI[1,:]- SAR_estimate_by_size_sample_mean]
-    ax4.errorbar(x = x_pos+0.25+0.0625*(i), y = SAR_estimate_by_size_sample_mean, yerr = yerr,
+    ax4.errorbar(x = x_pos-0.25-0.0625*(i), y = SAR_estimate_by_size_sample_mean, yerr = yerr,
                   fmt = 'o', color = colors[info], ecolor = colors[info], elinewidth = 3, capsize = 5, label = info + " info SAR est.")
 
 

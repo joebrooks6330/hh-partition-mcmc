@@ -21,7 +21,7 @@ else:
     print(f"File {filepath} not found.")
     quit()
     
-fixed = False
+fixed = True
 eta_fixed = 1.
 
 infectious_period_assumption_dict = {"Fixed": lambda t: np.exp(-t),
@@ -57,7 +57,7 @@ else:
         quit()
 
 
-results_fn = results_fn + results_suffix + f"_S={S}.pkl"
+results_fn = results_fn + results_suffix + ".pkl"
 
 # endregion
 

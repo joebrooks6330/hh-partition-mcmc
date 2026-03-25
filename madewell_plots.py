@@ -1,3 +1,4 @@
+#region Imports
 from pickle import load, dump
 import numpy as np
 import matplotlib.pyplot as plt
@@ -6,7 +7,9 @@ import pandas as pd
 
 plt.style.use("ggplot")
 plt.rcParams["font.family"] = "monospace"
+#endregion
 
+#region load datasets
 filepath = 'datasets/household_studies_low_info_madewell.csv'
 
 if isfile(filepath):
@@ -22,10 +25,10 @@ mean_sizes = [round(m,3) for m in mean_sizes]
 SAR_values = np.array(df["Number of household secondary cases"]).astype(float) / np.array(df["Number of household contacts"]).astype(float)
 
 variant_values = np.array(df["Variant"]).astype(str).tolist()
-color_dict = {"Wild": "blue", "Alpha": "green", "Delta": "orange", "Omicron": "red","Not Specified/Other": "black"}
+color_dict = {"Pre-Alpha": "blue", "Alpha": "green", "Delta": "orange", "Omicron": "red","Not Specified/Other": "black"}
 variant_values = [v if v in color_dict.keys() else "Not Specified/Other" for v in variant_values]
 
-fixed = False
+fixed = True 
 eta_fixed = 1.
 
 S  = 100
@@ -56,7 +59,6 @@ if isfile(results_fn):
 else:
     print(f"File {results_fn} not found.")
     quit()
-
 
 index_arr = results[0]
 results_arr = results[1]
@@ -105,16 +107,31 @@ for i in range(N_datasets):
     SITP_CI[i] = (np.percentile(SITP_results[i], 2.5), np.percentile(SITP_results[i], 97.5))
     
     C_results[i] = np.concatenate(ds_C_results)
+#endregion
 
-fig,axs = plt.subplots(5,6, figsize=(15,20))
-for i in range(N_datasets):
-    ax = axs[i//6,i%6]
-    ax.plot(beta_results[i])
-    ax.set_title(dataset_names[i])
-plt.show()
+#region PLOT: \beta trace plots
+n_datasets_per_plot = 10
+n_plots = N_datasets//n_datasets_per_plot + (1 if N_datasets%n_datasets_per_plot > 0 else 0)
+for k in range(n_plots): 
+    if k == n_plots-1:
+        n_rows = (N_datasets - n_datasets_per_plot*k + 1)//2
+    else:
+        n_rows = n_datasets_per_plot//2 
+    fig,axs = plt.subplots(n_rows,2, figsize=(20,3.5*n_rows))
+    for i in range(n_rows*2):
+        dataset_i = i+k*n_datasets_per_plot
+        ax = axs[i//2,i%2]
+        if i%2 ==0:
+            ax.set_ylabel("Transmission Rate" +  r"($\beta$)", fontsize=18)
+        ax.plot(beta_results[dataset_i],color = color_dict[str(variant_values[dataset_i])],linewidth = 0.25)
+        ax.set_title(dataset_names[dataset_i],fontsize=18)
+    plt.tight_layout()
+    plt.savefig(f"figures/madewell_beta_chains_{results_suffix}_{k}.png", bbox_inches='tight')
+print("Beta trace plots saved.")
 
 beta_CI_arr = np.array([beta_CI[i] for i in range(N_datasets)])
 beta_x_max = max(beta_CI_arr[:,1])
+#endregion
 
 fig,axs = plt.subplots(1,1, figsize=(15,20),sharey = True)
 
