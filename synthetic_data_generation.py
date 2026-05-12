@@ -26,11 +26,11 @@ else:
     hh_dist_UK_weighted = hh_dist_UK_weighted/sum(hh_dist_UK_weighted)
     UK_mu = np.dot(hh_dist_UK_weighted,np.arange(2,7,1))
 
-    hh_dist_split_weighted_func = lambda x: np.array([p*i for i,p in  enumerate([x,0.01,0.01,0.01,1-x],2)])
+    hh_dist_split_weighted_func = lambda x: np.array([p*i for i,p in  enumerate([x,0.05,0.05,0.05,1-x],2)])
     to_min = lambda x: np.dot(hh_dist_split_weighted_func(x)/sum(hh_dist_split_weighted_func(x)),np.arange(2,7,1)) - UK_mu
 
     a = brentq(to_min,0,1,xtol = 1e-10) # Find the value of a that gives the same mean as the UK distribution when weighted by size
-    hh_dist_split = [a,0.01,0.01,0.01,1-a] # type: ignore # Split household size distribution with same mean as UK distribution when weighted by size
+    hh_dist_split = [a,0.05,0.05,0.05,1-a] # type: ignore # Split household size distribution with same mean as UK distribution when weighted by size
     hh_dist_split_weighted = hh_dist_split_weighted_func(a) # Adjust distribution so that it is weighted by the size of the household
 
     hh_size_dist_dict = {"UK": hh_dist_UK,
@@ -87,8 +87,8 @@ else:
     N_hh_values = [25,100,250,1000]
     hh_size_distributions_keys = ["UK","split"]
     I_dist_assumption_dict = {"Fixed": lambda t: np.exp(-t),
-                                     "Markov": lambda t: 1/(1+t),
-                                     "Gamma2": lambda t: (1+(t/2))**(-2)}
+                              "Markov": lambda t: 1/(1+t),
+                              "Gamma2": lambda t: (1+(t/2))**(-2)}
     N_datasets = 100
 
 
