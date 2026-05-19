@@ -4,14 +4,13 @@ from HH_case_partition_MCMC import RunPartitionsMCMC,IndexChange1dTo2d
 from partition_functions import FlatPartition,get_simple_dataset
 from pickle import dump
 from os.path import isfile
-from scipy.stats import norm,poisson
 from scipy.optimize import minimize
 import numpy as np
 
 
 
 data_fn = "CARAZO_2021_FCDATASET.csv"
-dataset_H =array(genfromtxt("datasets\\" + data_fn,delimiter=','))
+dataset_H =array(genfromtxt("datasets/" + data_fn,delimiter=','))
 
 k_max = len(dataset_H)-1
 m = IndexChange1dTo2d(k_max)[0]
@@ -21,13 +20,13 @@ quebec_census_data = np.array([138280, 44770,41545,17555*2/3,17555/3]) #(assume 
 quebec_census_data_sw = np.array([cd*i for i,cd in enumerate(quebec_census_data,2)])
 quebec_census_data_proportions = quebec_census_data_sw/sum(quebec_census_data_sw)
 
-alpha_0 = 200 #Concentration parameter
+alpha_0 = 100 #Concentration parameter
 alpha = alpha_0*quebec_census_data_proportions
 
 dot_for_contacts = concatenate([zeros(n+1)+n for n in range(1,m+1)])
 
-n_iters = int(5e7)
-p_beta_move= 0.01
+n_iters = int(2e7)
+p_beta_move= 0.5
 
 #phi(-t) is MGF of infectious period distribution
 infectious_period_assumption_dict = {"Fixed": lambda t: np.exp(-t),
@@ -40,37 +39,45 @@ print("Using infectious period assumption:", inf_period_str,end = "\n")
 phi = infectious_period_assumption_dict[inf_period_str]
 
 #Low information (eta not fixed)
-results_fn_L = "outputs\\"  + data_fn.split(".")[0] + "_low_info_results_" + inf_period_str + ".pkl"
+results_fn_L = "outputs/"  + data_fn.split(".")[0] + "_low_info_results_" + inf_period_str + ".pkl"
 
 if isfile(results_fn_L):
     print("Low info MCMC has already been run for " + data_fn)
 else:
-    print("Running MCMC for low info for " + data_fn)
+    print("Estimating proposal covariance matrix for low info MCMC for " + data_fn)
+    test_beta,test_eta = RunPartitionsMCMC(dataset_H,0.1,0.5,m,int(n_iters/5),np.array([[0.1,0],[0,0.1]]),alpha, p_beta_move,thin=1,verbose = True,phi=phi)[2:4]
+    Sigma = (2.38**2)*np.cov(np.array([test_beta[int(n_iters/10):],test_eta[int(n_iters/10):]]))/2
     C0_L = FlatPartition(dataset_L[2],dataset_L[1],dataset_L[0],m)
-    low_info_results = RunPartitionsMCMC(dataset_H,0.1,0.1,m,1*n_iters,0.1,0.1,alpha,p_beta_move,thin=100,verbose=True,phi = phi)
-
+    print("Running MCMC for low info for " + data_fn)
+    low_info_results = RunPartitionsMCMC(C0_L,0.1,0.5,m,n_iters,Sigma,alpha,p_beta_move,thin=100,verbose=True,phi = phi)
     with open(results_fn_L,"wb") as f:
         dump(low_info_results,f)
         
 #Medium Information
-results_fn_M = "outputs\\"  + data_fn.split(".")[0] + "_medium_info_results_" + inf_period_str + ".pkl"
+results_fn_M = "outputs/"  + data_fn.split(".")[0] + "_medium_info_results_" + inf_period_str + ".pkl"
 
 if isfile(results_fn_M):
     print("Medium info MCMC has already been run for " + data_fn)
 else:
+    print("Estimating proposal covariance matrix for Medium info MCMC for " + data_fn)
+    test_beta,test_eta = RunPartitionsMCMC(dataset_H,0.1,0.5,m,int(n_iters/5),np.array([[0.1,0],[0,0.1]]),alpha, p_beta_move,thin=1,verbose = True,info_level="m",phi=phi)[2:4]
+    Sigma = (2.38**2)*np.cov(np.array([test_beta[int(n_iters/10):],test_eta[int(n_iters/10):]]))/2
     print("Running MCMC for medium info for " + data_fn)
-    medium_info_results = RunPartitionsMCMC(dataset_H,0.1,0.1,m,int(0.1*n_iters),0.1,0.1,p_beta_move=10*p_beta_move,thin=10,verbose=True,info_level="m",phi = phi)
+    medium_info_results = RunPartitionsMCMC(dataset_H,0.1,0.1,m,int(0.1*n_iters),Sigma,alpha,p_beta_move=p_beta_move,thin=10,verbose=True,info_level="m",phi = phi)
 
     with open(results_fn_M,"wb") as f:
         dump(medium_info_results,f)
 
 #High Information
-results_fn_H = "outputs\\" + data_fn.split(".")[0] + "_high_info_results_" + inf_period_str + ".pkl"
+results_fn_H = "outputs/" + data_fn.split(".")[0] + "_high_info_results_" + inf_period_str + ".pkl"
 if isfile(results_fn_H):
     print("High info MCMC has already been run for " + data_fn)
 else:
+    print("Estimating proposal covariance matrix for High info MCMC for " + data_fn)
+    test_beta,test_eta = RunPartitionsMCMC(dataset_H,0.1,0.5,m,int(n_iters/5),np.array([[0.1,0],[0,0.1]]),alpha, p_beta_move,thin=1,verbose = True,phi=phi,info_level="h")[2:4]
+    Sigma = (2.38**2)*np.cov(np.array([test_beta[int(n_iters/10):],test_eta[int(n_iters/10):]]))/2
     print("Running MCMC for high info for " + data_fn)
-    high_info_results = RunPartitionsMCMC(dataset_H,0.1,0.1,m,int(n_iters*p_beta_move),0.1,0.1,p_beta_move=1.,thin=1,verbose=True,info_level="h",phi = phi)
+    high_info_results = RunPartitionsMCMC(dataset_H,0.1,0.1,m,int(n_iters*0.01),Sigma,alpha,p_beta_move=1.,thin=1,verbose=True,info_level="h",phi = phi)
 
     with open(results_fn_H,"wb") as f:
         dump(high_info_results,f)

@@ -7,7 +7,7 @@ import numpy as np
 from numpy import genfromtxt
 from HH_case_partition_MCMC import IndexChange1dTo2d,IndexChange2dTo1d, fs_distn_single_type
 from statsmodels.stats.proportion import proportion_confint
-from scipy.stats import beta,gaussian_kde
+from scipy.stats import beta,gamma
 from tqdm import tqdm
 
 plt.style.use("ggplot")
@@ -70,9 +70,13 @@ infectious_period_assumption_dict = {"Fixed": lambda t: np.exp(-t),
                                      "Gamma2": lambda t: (1+(t/2))**(-2)}
 
 
-inf_period_str = "Fixed" 
+inf_period_str = "Gamma2" 
 print("Using infectious period assumption:", inf_period_str,end = "\n\n\n")
 phi = infectious_period_assumption_dict[inf_period_str]
+
+quebec_census_data = np.array([138280, 44770,41545,17555*2/3,17555/3]) #(assume 5+ person hh are split 2/3 5 person and 1/3 6 person)
+quebec_census_data_sw = np.array([cd*i for i,cd in enumerate(quebec_census_data,2)])
+quebec_census_data_proportions = quebec_census_data_sw/sum(quebec_census_data_sw)
 
 results_fn_L = "outputs\\"  + data_fn.split(".")[0] + "_low_info_results_" + inf_period_str + ".pkl"
 results_fn_M = "outputs\\"  + data_fn.split(".")[0] + "_medium_info_results_" + inf_period_str + ".pkl"
@@ -86,8 +90,8 @@ if isfile(results_fn_L):
         low_info_results = load(f)
 else:
     print("Low info MCMC results missing for " + data_fn + ". Please run script.")
-    pass
-burn_in = len(low_info_results[0])//10
+    quit()
+burn_in = len(low_info_results[0])//5
 beta_results_L = low_info_results[2][burn_in:]
 eta_results_L = low_info_results[3][burn_in:]
 C_results_L = low_info_results[0][burn_in:]
@@ -133,12 +137,13 @@ beta_results_H = high_info_results[2][burn_in:]
 eta_results_H = high_info_results[3][burn_in:]
 C_results_H = high_info_results[0][burn_in:]
 
-eta_posterior_fn = "outputs\\eta_kde_posterior_Carazo_high_info_" + inf_period_str + ".pkl"
+eta_posterior_fn = "outputs/eta_gamma_posterior_Carazo_high_info_" + inf_period_str + ".pkl"
 if isfile(eta_posterior_fn):
-    print("Eta posterior KDE already computed")
+    print("Eta posterior approximation already computed")
 else:
-    print("Computing eta posterior KDE")
-    eta_posterior = gaussian_kde(eta_results_H)
+    print("Computing eta posterior")
+    fit_alpha, fit_loc, fit_beta = gamma.fit(eta_results_H)
+    eta_posterior = gamma(fit_alpha, loc=fit_loc, scale=fit_beta)
     with open(eta_posterior_fn,"wb") as f:
         dump(eta_posterior,f)
 
@@ -232,6 +237,7 @@ hh_size_dist_sample_CI = np.percentile(household_size_dist_samples["Low"],[2.5,9
 yerr = [hh_size_dist_sample_mean-hh_size_dist_sample_CI[0,:],hh_size_dist_sample_CI[1,:]- hh_size_dist_sample_mean]
 ax4_hh_size.bar(x = x_pos+0.25+0.0625, height = hh_size_dist_sample_mean, yerr = yerr,color = colors["Low"],width = 0.125,capsize=5,label = "Estimated size dist. (low info)")
 ax4_hh_size.bar(x = x_pos+0.25-0.0625, height = hh_size_dist_data,color = 'black',width = 0.125,label = "Observed size dist.")
+ax4_hh_size.scatter(x = x_pos+0.25, y = sum(C_results_H[0])*quebec_census_data_proportions, color = 'grey', label = r"$\mathbb{E}(p_n)$", zorder=5,s=200,marker="X",edgecolors="black")
 ax4_hh_size.legend(fontsize=12, loc = "upper right")
 ax4_hh_size.set_yticks(np.arange(0,1450,200))
 ax4_hh_size.set_ylim(0,1600)
