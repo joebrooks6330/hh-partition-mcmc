@@ -674,7 +674,7 @@ def RunPartitionsMCMC(C0: np.ndarray,
 
     #Initialise array to store prior probabilities for beta (transmission rate)
     eta_logprior_probs = np.zeros(n_iters+1,dtype = np.float32)
-    eta_logprior_probs[0] = eta_logprior(eta0) if beta_logprior is not None else 0
+    eta_logprior_probs[0] = eta_logprior(eta0) if eta_logprior is not None else 0
     
     #Initialise array to store beta values
     etas = np.zeros(n_iters+1,dtype = np.float32)

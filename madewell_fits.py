@@ -21,8 +21,9 @@ else:
     print(f"File {filepath} not found.")
     quit()
     
-fixed = True
-eta_fixed = 1.
+fixed = False
+eta_fixed = 0.5
+alpha_str = "data" #"data", "flat" or "split"
 
 infectious_period_assumption_dict = {"Fixed": lambda t: np.exp(-t),
                                      "Markov": lambda t: 1/(1+t),
@@ -32,9 +33,23 @@ phi = infectious_period_assumption_dict[inf_period_str]
 
 alphas = df.alpha.to_list()
 alphas = [np.array([float(a) for a in alpha.split(",")]) for alpha in alphas]
-alphas_sw = [np.array([a*i for i,a in enumerate(alpha,1)]) for alpha in alphas]
-S = 100
-alphas_sw = [S*alpha[1:]/np.sum(alpha[1:]) for alpha in alphas_sw]
+
+if alpha_str == "data":
+    alphas_sw = [np.array([a*i for i,a in enumerate(alpha,1)]) for alpha in alphas]
+    alphas_sw = [alpha[1:]/np.sum(alpha[1:]) for alpha in alphas_sw]
+elif alpha_str == "flat":
+    alphas_sw = [np.ones(len(alpha)-1)/(len(alpha)-1) for alpha in alphas]
+elif alpha_str == "split":
+    with open("datasets/household_size_distributions.pkl","rb") as f:
+        hh_size_dist_dict = load(f)
+    alphas = [np.ones(len(alpha)-1) for alpha in alphas]
+    for alpha in alphas:
+        alpha[0] = 90
+        alpha[-1] = 15
+    alphas_sw = [np.array([a*i for i,a in enumerate(alpha,1)]) for alpha in alphas]
+    alphas_sw = [alpha/np.sum(alpha) for alpha in alphas_sw]
+
+    
 
 
 data_to_fit = array(df[['Number of Households', 'Number of household contacts',
@@ -44,16 +59,16 @@ data_to_fit = array([np.insert(v,0,i) for i,v in enumerate(data_to_fit)]) #Add i
 
 results_fn = "outputs/madewell_fits_results"
 if fixed:
-    results_suffix = f"_eta={eta_fixed}_{inf_period_str}_S={S}"
+    results_suffix = f"_eta={eta_fixed}_{inf_period_str}_alpha_{alpha_str}"
     eta_sigma = 0.
 else:
-    results_suffix = f"_Carazo_eta_{inf_period_str}_S={S}"
-    eta_posterior_fn = "outputs\\eta_kde_posterior_Carazo_high_info_" + inf_period_str + ".pkl"
+    results_suffix = f"_Carazo_eta_{inf_period_str}_alpha_{alpha_str}"
+    eta_posterior_fn = "outputs/eta_gamma_posterior_Carazo_high_info_" + inf_period_str + ".pkl"
     if isfile(eta_posterior_fn):
         with open(eta_posterior_fn,"rb") as f:
             eta_posterior = load(f)
     else:
-        print("KDE not computed for eta from Carazo et al. high info fit")
+        print("Gamma distribution not computed for eta from Carazo et al. high info fit")
         quit()
 
 
@@ -71,30 +86,57 @@ class MW_datasets_chain():
         N = p[2]
         n = p[3]
         y = p[4]
-        alpha = alphas_sw[p[1]]
+        alpha0 = 100
+        alpha = alpha0*alphas_sw[p[1]]
         m = len(alpha)
-        beta0 = 0.5
+        beta0 = 5
         eta0 = eta_fixed
         #eta_logprior = beta(1.01,2).logpdf
         
-        p_beta_move = min(10/N,0.5)
-        n_iters = int(1000*N)
+        if N<50:
+            p_beta_move = 0.5
+        else:
+            p_beta_move = 0.2
+            
+        n_iters = int(max(1000*N/p_beta_move,1e5))
         try:
-            C0 = FlatPartition(n,y,N,m)
-            results = RunPartitionsMCMC(C0,
-                                        beta0+norm(0,0.1).rvs(),
-                                        eta0,
-                                        int(m),
-                                        n_iters,
-                                        0.1,
-                                        0.1,
-                                        alpha=alpha,
-                                        p_beta_move = p_beta_move,
-                                        thin = 10,
-                                        verbose = False,
-                                        info_level = 'l',
-                                        phi = phi,
-                                        eta_logprior = eta_posterior.logpdf if not fixed else  lambda e: 0 if (e>=0 and e<=1) else -np.inf)# type: ignore
+            if N>3000:#Carazo et al. dataset
+                data_fn = "CARAZO_2021_FCDATASET.csv"
+                results_fn_H = "outputs/" + data_fn.split(".")[0] + "_high_info_results_" + inf_period_str + ".pkl"
+                if isfile(results_fn_H):
+                    with open(results_fn_H,"rb") as f:
+                        results = load(f)
+            else:
+                C0 = FlatPartition(n,y,N,m)
+                eta_logprior = eta_posterior.logpdf 
+                test_beta,test_eta = RunPartitionsMCMC(C0,
+                                                    beta0,
+                                                    eta0,
+                                                    int(m),
+                                                    int(n_iters/5),
+                                                    np.array([[0.1,0],[0,0.1]]),
+                                                    alpha,
+                                                    p_beta_move,
+                                                    thin=1,
+                                                    verbose = False,
+                                                    info_level="l",
+                                                    eta_logprior=eta_logprior,
+                                                    phi=phi)[2:4]
+                Sigma = (2.38**2)*np.cov(np.array([test_beta[int(n_iters/10):],test_eta[int(n_iters/10):]]))/2
+                            
+                results = RunPartitionsMCMC(C0,
+                                            beta0+norm(0,0.1).rvs(),
+                                            eta0,
+                                            int(m),
+                                            n_iters,
+                                            Sigma,
+                                            alpha=alpha,
+                                            p_beta_move = p_beta_move,
+                                            thin = 10,
+                                            verbose = False,
+                                            info_level = 'l',
+                                            phi = phi,
+                                            eta_logprior = eta_posterior.logpdf if not fixed else  lambda e: 0 if (e>=0 and e<=1) else -np.inf)# type: ignore
 
         except:
             import traceback
@@ -115,6 +157,12 @@ def main(no_of_workers,n_chains):
         print(f"Using fixed eta = {eta_fixed}")
     else:
         print("Using eta from Carazo et al.")
+        
+    print(f"Results Filename = {results_fn}")
+    
+    if isfile(results_fn):
+        print(f"File {results_fn} already exists.")
+        quit()
 
     chain = MW_datasets_chain()
 

@@ -82,8 +82,8 @@ def SplitPartition(n,y,N,m):
                 C[IndexChange2dTo1d(m, 0)] =  N_m - y//m - 1
         else:
             C[IndexChange2dTo1d(m, m)] = N_m
-            y-= N_m*m
-            C[IndexChange2dTo1d(last_size, y)] = 1
+            y-= int(N_m*m)
+            C[IndexChange2dTo1d(last_size, int(y))] = 1
             
             
     return C

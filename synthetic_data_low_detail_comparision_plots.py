@@ -60,7 +60,7 @@ I_dist_assumption_dict = {"Fixed": lambda t: np.exp(-t),
 
 I_dist = "Gamma2" 
 print("I assumption: " + I_dist)
-N_hh = 100
+N_hh = 1000
 print("N_hh =" + str(N_hh))
 plot_HHSD = False
 plot_beta_trace = False
@@ -114,17 +114,17 @@ for p1 in tqdm(params,desc = "Loading results"):
         
         ESS_results = np.array([az.ess(np.log(br.reshape(1,-1))) for br in beta_results])
         acceptance_results = [r[-1] for r in results]
-        if tp == ("split","true") and beta==1.5:
-            fig_temp,ax_temp = plt.subplots(2,1)
-            fig_temp.suptitle(tp[0]+tp[1])
-            i_w = np.argmin(ESS_results)
-            ax_temp[0].plot(beta_results[i_w])
-            print(sum(acceptance_results)/len(acceptance_results))
-            ax_temp[0].set_title(f"beta = {beta}, eta = {eta}, AR = {acceptance_results[i_w]}, SAR = {results_SAR[tp][beta][eta][i_w]}")
-            ax_temp[1].plot(C_results[i_w,:,:2])
+        # if tp == ("split","true") and beta==1.5:
+        #     fig_temp,ax_temp = plt.subplots(2,1)
+        #     fig_temp.suptitle(tp[0]+tp[1])
+        #     i_w = np.argmin(ESS_results)
+        #     ax_temp[0].plot(beta_results[i_w])
+        #     print(sum(acceptance_results)/len(acceptance_results))
+        #     ax_temp[0].set_title(f"beta = {beta}, eta = {eta}, AR = {acceptance_results[i_w]}, SAR = {results_SAR[tp][beta][eta][i_w]}")
+        #     ax_temp[1].plot(C_results[i_w,:,:2])
         
-            print()
-            plt.show()
+        #     print()
+        #     plt.show()
         results_ESS[tp][beta][eta] = ESS_results
         
         # comb_results = np.concatenate([C_results[:,n_iters//5:,:], beta_results[:,:,None]],axis=2)
@@ -224,29 +224,25 @@ if plot_beta_trace:
 #endregion
        
 #region ESS Plots
+labels = ["UK Data\n" +  r"Split $\mathbf{\alpha}$",
+          "UK Data\n" +  r"UK $\mathbf{\alpha}$", 
+          "Split Data\n" +  r"UK $\mathbf{\alpha}$", 
+          "Split Data\n" +  r"Split $\mathbf{\alpha}$"]
 if plot_ESS:
-    for tp in tqdm(hh_dist_prior_tuples, desc="Plotting ESS plots"):
-            hhsd_hh_dist_traceplot = tp[0]
-            alpha_str = tp[1]
-
-            fig4,axes4 = plt.subplots(len(eta_values),len(beta_values), figsize = (20,10),sharex = True)
-            fig4.supxlabel(r"Dataset $i$", fontsize = 35)
-            fig4.supylabel(r"$ESS$", fontsize = 35)
-            
-            for i,beta in enumerate(beta_values):
-                for j,eta in enumerate(eta_values):
-                    axes4[j,0].set_ylabel(r"$\eta$:" + str(eta),fontsize=25)
-                    axes4[0,i].set_title(r"$\beta = $" + str(beta),fontsize=25)
+    fig4,axes4 = plt.subplots(len(eta_values),len(beta_values), figsize = (20,10),sharex = True)
+    for i,beta in enumerate(beta_values):
+        for j,eta in enumerate(eta_values):
+            axes4[j,0].set_ylabel(r"$\eta$:" + str(eta),fontsize=25)
+            axes4[0,i].set_title(r"$\beta = $" + str(beta),fontsize=25)
                     
-                    ax4 = axes4[j,i]
-                    
-                    ESS_results = results_ESS[(hhsd_hh_dist_traceplot,alpha_str)][beta][eta]
-                    if not sum(ESS_results)==0:
-                        ax4.bar(range(N_datasets),np.sort(ESS_results),color = "black")
-                        ax4.set_xlim(-1,101)
-                        ax4.hlines([200],-10,110)
-
-            fig4.savefig(f"figures/validation figures/{hhsd_hh_dist_traceplot}_ESS_plot_alpha={alpha_str}_Nhh={N_hh}.png", dpi = 200,bbox_inches ='tight')
+            ax4 = axes4[j,i]
+            ESS_to_plot = np.array([results_ESS[tp][beta][eta] if not sum(results_ESS[tp][beta][eta])==0 else np.zeros(100) for tp in hh_dist_prior_tuples]).T
+            ax4.boxplot(ESS_to_plot,tick_labels = labels)
+            for ticklabel in ax4.get_xticklabels():
+                ticklabel.set_horizontalalignment("center")
+        
+    fig4.supylabel("Effective sample size (ESS)", fontsize = 35,x=0.05)
+    fig4.savefig(f"figures/validation figures/ESS_plot_Nhh={N_hh}_{detail}.png", dpi = 200,bbox_inches ='tight')
 #endregion
 
 #region Main Plots

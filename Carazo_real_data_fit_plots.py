@@ -70,7 +70,7 @@ infectious_period_assumption_dict = {"Fixed": lambda t: np.exp(-t),
                                      "Gamma2": lambda t: (1+(t/2))**(-2)}
 
 
-inf_period_str = "Gamma2" 
+inf_period_str = "Markov" 
 print("Using infectious period assumption:", inf_period_str,end = "\n\n\n")
 phi = infectious_period_assumption_dict[inf_period_str]
 
@@ -239,8 +239,8 @@ ax4_hh_size.bar(x = x_pos+0.25+0.0625, height = hh_size_dist_sample_mean, yerr =
 ax4_hh_size.bar(x = x_pos+0.25-0.0625, height = hh_size_dist_data,color = 'black',width = 0.125,label = "Observed size dist.")
 ax4_hh_size.scatter(x = x_pos+0.25, y = sum(C_results_H[0])*quebec_census_data_proportions, color = 'grey', label = r"$\mathbb{E}(p_n)$", zorder=5,s=200,marker="X",edgecolors="black")
 ax4_hh_size.legend(fontsize=12, loc = "upper right")
-ax4_hh_size.set_yticks(np.arange(0,1450,200))
-ax4_hh_size.set_ylim(0,1600)
+ax4_hh_size.set_yticks(np.linspace(0,1750,8))
+ax4_hh_size.set_ylim(0,1820)
 ax4_hh_size.set_ylabel("Number of house holds",rotation=270, fontsize=20,labelpad=25)
 ax4_hh_size.grid(False)
 
@@ -264,7 +264,7 @@ ax4.set_xticks(x_pos_all)
 ax4.set_xticklabels(["Overall"] + list(x_pos),fontsize=15)
 ax4.set_xlabel("Household Size",fontsize=20)
 ax4.set_ylabel("Secondary Attack Rate",fontsize=20)
-ax4.set_ylim(0.15,0.5125)
+ax4.set_ylim(0.15,0.514)
 ax4.set_yticks(np.arange(0.15,0.55,0.05))
 ax4.legend(fontsize=12, loc = (0.,0.6))
 ax4.vlines(x_pos-0.5,0,1,color = "grey",linestyle = "--")
